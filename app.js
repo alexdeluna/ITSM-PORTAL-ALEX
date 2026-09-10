@@ -1,3 +1,15 @@
+import {
+    auth,
+    db,
+    googleProvider,
+    doc,
+    getDoc,
+    signInWithEmailAndPassword,
+    signInWithPopup,
+    onAuthStateChanged,
+    signOut
+} from './auth.js';
+
 /* API local: a automação futura poderá chamar createTicket(payload) ou adaptar esta função para uma rota HTTP. */
 const users=[
  {id:'u1',email:'solicitante@teste.local',password:'123456',name:'Alexsandro Luna',username:'alexsandro.luna',role:'requester',department:'Financeiro',unit:'Matriz'},
@@ -41,7 +53,88 @@ function slaResult(t){return t.closedAt?(new Date(t.closedAt)<=deadline(t)?'Dent
 function slaInfo(t){const result=slaResult(t);return result?`<strong class="${result==='Dentro da SLA'?'sla-ok':'sla-late'}">${result}</strong><br><span class="muted">Encerrado: ${formatDate(t.closedAt)}</span>`:`<span class="muted">Limite: ${formatDate(deadline(t))}</span>`}
 function typeFor(sub){return requisitions.includes(sub)?'Requisição':'Incidente'}
 function badge(status){return `<span class="badge ${status==='Aberto'?'open':status==='Em análise'?'analysis':'done'}">${status}</span>`}
-function login(){return `<main class="login"><section class="login-card"><div class="brand"><div class="mark">TI</div><div><h1>Portal de Serviços</h1><p>Ambiente de demonstração</p></div></div><h2>Acessar portal</h2><p class="hint">Entre com seu usuário corporativo ou com uma conta técnica.</p><form id="login-form"><label>Usuário ou e-mail</label><input id="email" required placeholder="ex.: joao.gomes"><label style="margin-top:16px">Senha</label><input id="password" type="password" required placeholder="••••••"><div id="login-error"></div><button class="primary" style="width:100%;margin-top:22px">Entrar</button></form><p style="text-align:center;margin:16px 0 0"><a href="chatbot.html" style="color:#0870bc;font-weight:700">Experimentar assistente de TI →</a></p><div class="credentials"><strong>Contas de demonstração</strong><br>Solicitante: alexsandro.luna<br>Técnicos: tecnico1@teste.local ou tecnico2@teste.local<br>Senha inicial: 123456</div></section></main>`}
+function login(){
+    return `
+        <main class="login">
+            <section class="login-card">
+
+                <div class="brand">
+                    <div class="mark">TI</div>
+                    <div>
+                        <h1>Portal de Serviços</h1>
+                        <p>Ambiente de atendimento</p>
+                    </div>
+                </div>
+
+                <h2>Acessar portal</h2>
+
+                <p class="hint">
+                    Entre com seu e-mail corporativo ou utilize sua conta Google.
+                </p>
+
+                <form id="login-form">
+
+                    <label>E-mail</label>
+                    <input
+                        id="email"
+                        type="email"
+                        required
+                        autocomplete="email"
+                        placeholder="seu.email@empresa.com"
+                    >
+
+                    <label style="margin-top:16px">
+                        Senha
+                    </label>
+
+                    <input
+                        id="password"
+                        type="password"
+                        required
+                        autocomplete="current-password"
+                        placeholder="••••••"
+                    >
+
+                    <div id="login-error"></div>
+
+                    <button
+                        type="submit"
+                        class="primary"
+                        style="width:100%;margin-top:22px"
+                    >
+                        Entrar
+                    </button>
+
+                </form>
+
+                <div style="display:flex;align-items:center;gap:12px;margin:20px 0">
+                    <div style="height:1px;background:#ddd;flex:1"></div>
+                    <span class="muted">ou</span>
+                    <div style="height:1px;background:#ddd;flex:1"></div>
+                </div>
+
+                <button
+                    id="google-login"
+                    class="secondary"
+                    type="button"
+                    style="width:100%"
+                >
+                    Entrar com Google
+                </button>
+
+                <p style="text-align:center;margin:16px 0 0">
+                    <a
+                        href="chatbot.html"
+                        style="color:#0870bc;font-weight:700"
+                    >
+                        Experimentar assistente de TI →
+                    </a>
+                </p>
+
+            </section>
+        </main>
+    `;
+}
 function shell(content){const tech=state.user.role==='technician';return `<div class="shell"><header class="topbar"><div class="brand"><div class="mark">TI</div><div><h1>Portal de Serviços</h1><p>Ambiente local de demonstração</p></div></div><div class="userbar"><span>${state.user.name}</span><button class="logout" id="logout">Sair</button></div></header><div class="layout"><aside class="sidebar"><div class="nav-label">${tech?'EQUIPE DE SUPORTE':'SOLICITANTE'}</div>${tech?`<button class="nav ${state.view==='queue'?'active':''}" data-view="queue">Fila de chamados</button><button class="nav ${state.view==='users'?'active':''}" data-view="users">Cadastro de usuários</button>`:`<button class="nav ${state.view==='new'?'active':''}" data-view="new">Abrir novo chamado</button><button class="nav ${state.view==='mine'?'active':''}" data-view="mine">Meus chamados</button>`}</aside><main class="main">${content}</main></div></div>`}
 function newTicket(){const services=Object.keys(catalog).map(x=>`<option>${x}</option>`).join('');return shell(`<div class="page-head"><div><h2>Abrir novo chamado</h2><p>Informe os dados para registrar sua solicitação.</p></div></div><section class="card"><form id="ticket-form"><div class="form-grid"><div><label>Nome do solicitante</label><input readonly value="${state.user.name}"></div><div><label>Unidade / Departamento</label><input readonly value="${state.user.unit} / ${state.user.department}"></div><div><label>Serviço</label><select id="service" required><option value="">Selecione um serviço</option>${services}</select></div><div><label>Subcategoria</label><select id="subcategory" required disabled><option>Escolha primeiro um serviço</option></select></div><div><label>Tipo de chamado</label><input id="type" readonly value="Será definido automaticamente"><p class="readonly-note">Classificação automática.</p></div><div><label>SLA de resolução</label><input id="sla" readonly value="Selecione prioridade e subcategoria"><p class="readonly-note">Prazo calculado automaticamente.</p></div><div class="full"><label>Prioridade</label><div class="priority"><label><input type="radio" name="priority" value="Baixa" required> Baixa</label><label><input type="radio" name="priority" value="Média"> Média</label><label><input type="radio" name="priority" value="Alta"> Alta</label></div></div><div class="full"><label>Descrição</label><textarea id="description" required placeholder="Descreva o motivo do chamado com suas palavras."></textarea></div></div><div class="actions"><button type="reset" class="secondary">Limpar</button><button class="primary">Criar chamado</button></div></form></section>`)}
 function mine(){const list=tickets().filter(t=>t.requester===state.user.username).sort((a,b)=>new Date(b.openedAt)-new Date(a.openedAt));return shell(`<div class="page-head"><div><h2>Meus chamados</h2><p>Acompanhe os tickets registrados em seu nome.</p></div><button class="primary" data-view="new">+ Abrir novo chamado</button></div><section class="card">${list.length?table(list,false):'<div class="empty">Você ainda não possui chamados cadastrados.</div>'}</section>`)}
@@ -51,7 +144,297 @@ function usersPage(){const list=directory();return shell(`<div class="page-head"
 function detail(){const t=tickets().find(x=>x.id===state.selected);if(!t)return mine();const tech=state.user.role==='technician',result=slaResult(t);return shell(`<div class="page-head"><div><button class="ticket-link" data-view="${tech?'queue':'mine'}">← Voltar</button><h2 style="margin-top:12px">Chamado #2026-${t.id}</h2><p>${badge(t.status)}</p></div>${tech&&t.responsible===state.user.name&&t.status!=='Concluído'?`<button class="primary" id="finish">Concluir chamado</button>`:''}</div><section class="card"><div class="detail-grid"><div><span>Solicitante</span><strong>${t.requester}</strong></div><div><span>Serviço</span><strong>${t.service}</strong></div><div><span>Subcategoria</span><strong>${t.subcategory}</strong></div><div><span>Tipo</span><strong>${t.type}</strong></div><div><span>Prioridade / SLA</span><strong>${t.priority} · ${t.sla} horas</strong></div><div><span>Responsável</span><strong>${t.responsible||'Não atribuído'}</strong></div><div><span>Prazo limite</span><strong>${formatDate(deadline(t))}</strong></div>${t.closedAt?`<div><span>Encerrado em</span><strong>${formatDate(t.closedAt)}</strong></div><div><span>Resultado da SLA</span><strong class="${result==='Dentro da SLA'?'sla-ok':'sla-late'}">${result}</strong></div>`:''}</div><label>Descrição</label><p>${t.description}</p><h3>Andamento</h3><div class="timeline"><div class="event"><strong>Chamado criado</strong><time>${formatDate(t.openedAt)}</time></div>${t.responsible?`<div class="event"><strong>Capturado por ${t.responsible}</strong><time>Atualização registrada no ambiente de teste</time></div>`:''}${t.status==='Concluído'?`<div class="event"><strong>Chamado concluído · ${result}</strong><time>${formatDate(t.closedAt)}</time></div>`:''}</div></section>`)}
 function render(){let page=!state.user?login():state.view==='new'?newTicket():state.view==='mine'?mine():state.view==='queue'?queue():state.view==='users'?usersPage():detail();$('#app').innerHTML=page;bind()}
 function updateForm(){const sub=$('#subcategory')?.value,priority=document.querySelector('input[name="priority"]:checked')?.value;if(!sub)return;const type=typeFor(sub);$('#type').value=type;$('#sla').value=priority?`${slas[type][priority]} horas`:'Selecione uma prioridade'}
-function bind(){if(!state.user){$('#login-form').onsubmit=e=>{e.preventDefault();const identifier=$('#email').value.trim().toLowerCase(),password=$('#password').value,technical=users.find(x=>(x.email===identifier||x.username===identifier)&&x.password===password),registered=directory().find(x=>x.username===identifier&&x.password===password),u=technical||(registered&&{...registered,role:'requester'});if(!u){$('#login-error').innerHTML='<div class="message error">Usuário ou senha inválidos.</div>';return}state.user=u;state.view=u.role==='technician'?'queue':'new';render()};return}$('#logout').onclick=()=>{state.user=null;render()};document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{state.view=b.dataset.view;state.selected=null;render()});document.querySelectorAll('[data-ticket]').forEach(b=>b.onclick=()=>{state.selected=Number(b.dataset.ticket);state.view='detail';render()});document.querySelectorAll('[data-capture]').forEach(b=>b.onclick=()=>{const list=tickets(),t=list.find(x=>x.id===Number(b.dataset.capture));t.responsible=state.user.name;t.status='Em análise';save(list);render()});if($('#user-form'))$('#user-form').onsubmit=e=>{e.preventDefault();const list=directory(),username=$('#new-username').value.trim().toLowerCase();if(list.some(u=>u.username===username)){alert('Este usuário já está cadastrado.');return}list.push({username,password:$('#new-password').value,name:$('#new-name').value.trim(),unit:$('#new-unit').value.trim(),department:$('#new-department').value.trim()});saveDirectory(list);render()};if($('#service')){$('#service').onchange=e=>{const subs=catalog[e.target.value]||[];$('#subcategory').disabled=!subs.length;$('#subcategory').innerHTML='<option value="">Selecione uma subcategoria</option>'+subs.map(x=>`<option>${x}</option>`).join('');updateForm()};$('#subcategory').onchange=updateForm;document.querySelectorAll('input[name="priority"]').forEach(x=>x.onchange=updateForm);$('#ticket-form').onsubmit=e=>{e.preventDefault();const service=$('#service').value,subcategory=$('#subcategory').value,priority=document.querySelector('input[name="priority"]:checked').value,type=typeFor(subcategory),list=tickets(),id=Math.max(...list.map(x=>x.id),1000)+1;const ticket={id,requester:state.user.username,service,subcategory,type,priority,sla:slas[type][priority],status:'Aberto',responsible:null,openedAt:new Date().toISOString(),description:$('#description').value};list.push(ticket);save(list);showSuccess(ticket)}}if($('#finish'))$('#finish').onclick=()=>{const list=tickets(),t=list.find(x=>x.id===state.selected);t.status='Concluído';t.closedAt=new Date().toISOString();save(list);render()}}
+function bind(){
+
+    if(!state.user){
+
+        $('#login-form').onsubmit = async e => {
+            e.preventDefault();
+
+            const email = $('#email').value.trim();
+            const password = $('#password').value;
+
+            const error = $('#login-error');
+
+            error.innerHTML = '';
+
+            try {
+
+                await signInWithEmailAndPassword(
+                    auth,
+                    email,
+                    password
+                );
+
+            } catch (err) {
+
+                console.error(err);
+
+                let message = 'Não foi possível realizar o login.';
+
+                if(
+                    err.code === 'auth/invalid-credential' ||
+                    err.code === 'auth/wrong-password' ||
+                    err.code === 'auth/user-not-found'
+                ){
+                    message = 'E-mail ou senha inválidos.';
+                }
+
+                if(err.code === 'auth/too-many-requests'){
+                    message = 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+                }
+
+                error.innerHTML = `
+                    <div class="message error">
+                        ${message}
+                    </div>
+                `;
+            }
+        };
+
+        $('#google-login').onclick = async () => {
+
+            const error = $('#login-error');
+
+            error.innerHTML = '';
+
+            try {
+
+                await signInWithPopup(
+                    auth,
+                    googleProvider
+                );
+
+            } catch (err) {
+
+                console.error(err);
+
+                let message = 'Não foi possível entrar com o Google.';
+
+                if(err.code === 'auth/popup-closed-by-user'){
+                    message = 'A janela de login foi fechada.';
+                }
+
+                error.innerHTML = `
+                    <div class="message error">
+                        ${message}
+                    </div>
+                `;
+            }
+        };
+
+        return;
+    }
+
+    $('#logout').onclick = async () => {
+
+        try {
+            await signOut(auth);
+        } catch(err) {
+            console.error(err);
+        }
+
+        state.user = null;
+        state.view = 'new';
+        state.selected = null;
+
+        render();
+    };
+
+    document.querySelectorAll('[data-view]').forEach(b =>
+        b.onclick = () => {
+            state.view = b.dataset.view;
+            state.selected = null;
+            render();
+        }
+    );
+
+    document.querySelectorAll('[data-ticket]').forEach(b =>
+        b.onclick = () => {
+            state.selected = Number(b.dataset.ticket);
+            state.view = 'detail';
+            render();
+        }
+    );
+
+    document.querySelectorAll('[data-capture]').forEach(b =>
+        b.onclick = () => {
+            const list = tickets();
+            const t = list.find(x => x.id === Number(b.dataset.capture));
+
+            t.responsible = state.user.name;
+            t.status = 'Em análise';
+
+            save(list);
+            render();
+        }
+    );
+
+    if($('#user-form'))
+        $('#user-form').onsubmit = e => {
+            e.preventDefault();
+
+            const list = directory();
+            const username = $('#new-username').value.trim().toLowerCase();
+
+            if(list.some(u => u.username === username)){
+                alert('Este usuário já está cadastrado.');
+                return;
+            }
+
+            list.push({
+                username,
+                password: $('#new-password').value,
+                name: $('#new-name').value.trim(),
+                unit: $('#new-unit').value.trim(),
+                department: $('#new-department').value.trim()
+            });
+
+            saveDirectory(list);
+            render();
+        };
+
+    if($('#service')){
+
+        $('#service').onchange = e => {
+
+            const subs = catalog[e.target.value] || [];
+
+            $('#subcategory').disabled = !subs.length;
+
+            $('#subcategory').innerHTML =
+                '<option value="">Selecione uma subcategoria</option>' +
+                subs.map(x => `<option>${x}</option>`).join('');
+
+            updateForm();
+        };
+
+        $('#subcategory').onchange = updateForm;
+
+        document
+            .querySelectorAll('input[name="priority"]')
+            .forEach(x => x.onchange = updateForm);
+
+        $('#ticket-form').onsubmit = e => {
+
+            e.preventDefault();
+
+            const service = $('#service').value;
+            const subcategory = $('#subcategory').value;
+            const priority =
+                document.querySelector('input[name="priority"]:checked').value;
+
+            const type = typeFor(subcategory);
+            const list = tickets();
+
+            const id =
+                Math.max(...list.map(x => x.id), 1000) + 1;
+
+            const ticket = {
+                id,
+                requester: state.user.username,
+                service,
+                subcategory,
+                type,
+                priority,
+                sla: slas[type][priority],
+                status: 'Aberto',
+                responsible: null,
+                openedAt: new Date().toISOString(),
+                description: $('#description').value
+            };
+
+            list.push(ticket);
+
+            save(list);
+
+            showSuccess(ticket);
+        };
+    }
+
+    if($('#finish'))
+        $('#finish').onclick = () => {
+
+            const list = tickets();
+            const t = list.find(x => x.id === state.selected);
+
+            t.status = 'Concluído';
+            t.closedAt = new Date().toISOString();
+
+            save(list);
+            render();
+        };
+}
 function showSuccess(t){const modal=document.createElement('div');modal.className='modal';modal.innerHTML=`<div class="modal-box"><h2>✓ Chamado criado com sucesso</h2><p class="number">#2026-${t.id}</p><div class="confirm-list"><strong>${t.service}</strong> · ${t.subcategory}<br>Tipo: ${t.type}<br>Prioridade: ${t.priority}<br>SLA de resolução: ${t.sla} horas<br>Status: Aberto</div><div class="actions"><button class="primary" id="go-mine">Ver meus chamados</button></div></div>`;document.body.append(modal);$('#go-mine').onclick=()=>{modal.remove();state.view='mine';render()}}
 window.localTicketApi={createTicket(payload){const list=tickets(),id=Math.max(...list.map(x=>x.id),1000)+1;const type=payload.type||typeFor(payload.subcategory),priority=payload.priority||'Média';const ticket={id,status:'Aberto',responsible:null,openedAt:new Date().toISOString(),sla:slas[type][priority],...payload,type,priority};list.push(ticket);save(list);return ticket},getTickets(){return tickets()}};
-render();
+onAuthStateChanged(auth, async user => {
+
+    if(!user){
+
+        state.user = null;
+        state.view = 'new';
+        state.selected = null;
+
+        render();
+        return;
+    }
+
+    try {
+
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+
+        if(!userSnap.exists()){
+
+            console.error(
+                'Usuário autenticado, mas sem perfil no Firestore:',
+                user.uid
+            );
+
+            state.user = null;
+
+            render();
+
+            $('#login-error').innerHTML = `
+                <div class="message error">
+                    Seu usuário foi autenticado, mas ainda não possui
+                    um perfil cadastrado no sistema.
+                </div>
+            `;
+
+            await signOut(auth);
+
+            return;
+        }
+
+        const profile = userSnap.data();
+
+        state.user = {
+            id: user.uid,
+            email: user.email,
+            name: profile.name || user.displayName || user.email.split('@')[0],
+            username: profile.username || user.email.split('@')[0],
+            role: profile.role || 'requester',
+            unit: profile.unit || 'Não definido',
+            department: profile.department || 'Não definido'
+        };
+
+        state.view =
+            state.user.role === 'technician'
+                ? 'queue'
+                : 'new';
+
+        render();
+
+    } catch(err) {
+
+        console.error(
+            'Erro ao carregar perfil do usuário:',
+            err
+        );
+
+        state.user = null;
+
+        render();
+    }
+});
