@@ -1,10 +1,13 @@
-//nova
 import {
     auth,
     db,
     googleProvider,
+    collection,
     doc,
     getDoc,
+    getDocs,
+    addDoc,
+    updateDoc,
     signInWithEmailAndPassword,
     signInWithPopup,
     onAuthStateChanged,
@@ -42,10 +45,32 @@ const directorySeed=[
  {username:'carlos.lima',name:'Carlos Lima',password:'123456',unit:'Filial São Paulo',department:'Comercial'},
  {username:'beatriz.rocha',name:'Beatriz Rocha',password:'123456',unit:'Matriz',department:'Recursos Humanos'}
 ];
-let state={user:null,view:'new',selected:null,message:''};
+let state={
+    user:null,
+    view:'new',
+    selected:null,
+    message:'',
+    tickets:[]
+};
 const $=s=>document.querySelector(s); const pad=n=>String(n).padStart(2,'0');
-function tickets(){const stored=localStorage.getItem('itsm-demo-tickets');if(!stored||localStorage.getItem('itsm-demo-seed-version')!=='3'){localStorage.setItem('itsm-demo-tickets',JSON.stringify(seeded));localStorage.setItem('itsm-demo-seed-version','3');return [...seeded]}return JSON.parse(stored)}
-function save(list){localStorage.setItem('itsm-demo-tickets',JSON.stringify(list))}
+async function loadTickets(){
+
+    const snapshot = await getDocs(
+        collection(db,'tickets')
+    );
+
+    state.tickets = snapshot.docs.map(doc => ({
+        firestoreId: doc.id,
+        ...doc.data()
+    }));
+
+    return state.tickets;
+}
+
+function tickets(){
+
+    return state.tickets;
+}
 function directory(){const stored=localStorage.getItem('itsm-demo-users');if(!stored){localStorage.setItem('itsm-demo-users',JSON.stringify(directorySeed));return [...directorySeed]}const list=JSON.parse(stored),migrated=list.map(u=>({...u,password:u.password||'123456'}));if(JSON.stringify(list)!==JSON.stringify(migrated))localStorage.setItem('itsm-demo-users',JSON.stringify(migrated));return migrated}
 function saveDirectory(list){localStorage.setItem('itsm-demo-users',JSON.stringify(list))}
 function formatDate(v){const d=new Date(v);return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${String(d.getFullYear()).slice(2)} ${pad(d.getHours())}:${pad(d.getMinutes())}`}
@@ -142,96 +167,339 @@ function mine(){const list=tickets().filter(t=>t.requester===state.user.username
 function table(list,tech){return `<div class="table-wrap"><table class="tickets"><thead><tr><th>Ticket</th><th>Solicitante</th><th>Serviço</th><th>Aberto em</th><th>Status</th>${tech?'<th>SLA</th><th>Responsável</th><th>Ação</th>':''}</tr></thead><tbody>${list.map(t=>`<tr><td><button class="ticket-link" data-ticket="${t.id}">#2026-${t.id}</button></td><td>${t.requester}</td><td>${t.service}</td><td>${formatDate(t.openedAt)}</td><td>${badge(t.status)}</td>${tech?`<td>${slaInfo(t)}</td><td>${t.responsible||'<span class="muted">Não atribuído</span>'}</td><td>${!t.responsible?`<button class="primary capture" data-capture="${t.id}">Capturar</button>`:`<button class="secondary" data-ticket="${t.id}">Visualizar</button>`}</td>`:''}</tr>`).join('')}</tbody></table></div>`}
 function queue(){const list=tickets().sort((a,b)=>new Date(a.openedAt)-new Date(b.openedAt));return shell(`<div class="page-head"><div><h2>Fila de chamados</h2><p>Chamados em ordem de abertura. Capture um ticket para assumir o atendimento.</p></div></div><section class="card">${table(list,true)}</section>`)}
 function usersPage(){const list=directory();return shell(`<div class="page-head"><div><h2>Cadastro de usuários</h2><p>Base local que simula a futura consulta ao Active Directory.</p></div></div><section class="card"><h3 style="margin-top:0">Adicionar usuário</h3><form id="user-form"><div class="form-grid"><div><label>Usuário (AD)</label><input id="new-username" required placeholder="nome.sobrenome"></div><div><label>Senha de acesso</label><input id="new-password" type="password" required placeholder="Defina uma senha"></div><div><label>Nome completo</label><input id="new-name" required placeholder="Nome do colaborador"></div><div><label>Unidade</label><input id="new-unit" required placeholder="Ex.: Matriz"></div><div class="full"><label>Departamento</label><input id="new-department" required placeholder="Ex.: Financeiro"></div></div><div class="actions"><button class="primary">Cadastrar usuário</button></div></form></section><section class="card" style="margin-top:24px"><h3 style="margin-top:0">Usuários cadastrados</h3><div class="table-wrap"><table class="tickets"><thead><tr><th>Usuário</th><th>Nome</th><th>Unidade</th><th>Departamento</th><th>Acesso</th></tr></thead><tbody>${list.map(u=>`<tr><td><strong>${u.username}</strong></td><td>${u.name}</td><td>${u.unit}</td><td>${u.department}</td><td><span class="badge done">Ativo</span></td></tr>`).join('')}</tbody></table></div></section>`)}
-function detail(){const t=tickets().find(x=>x.id===state.selected);if(!t)return mine();const tech=state.user.role==='technician',result=slaResult(t);return shell(`<div class="page-head"><div><button class="ticket-link" data-view="${tech?'queue':'mine'}">← Voltar</button><h2 style="margin-top:12px">Chamado #2026-${t.id}</h2><p>${badge(t.status)}</p></div>${tech&&t.responsible===state.user.name&&t.status!=='Concluído'?`<button class="primary" id="finish">Concluir chamado</button>`:''}</div><section class="card"><div class="detail-grid"><div><span>Solicitante</span><strong>${t.requester}</strong></div><div><span>Serviço</span><strong>${t.service}</strong></div><div><span>Subcategoria</span><strong>${t.subcategory}</strong></div><div><span>Tipo</span><strong>${t.type}</strong></div><div><span>Prioridade / SLA</span><strong>${t.priority} · ${t.sla} horas</strong></div><div><span>Responsável</span><strong>${t.responsible||'Não atribuído'}</strong></div><div><span>Prazo limite</span><strong>${formatDate(deadline(t))}</strong></div>${t.closedAt?`<div><span>Encerrado em</span><strong>${formatDate(t.closedAt)}</strong></div><div><span>Resultado da SLA</span><strong class="${result==='Dentro da SLA'?'sla-ok':'sla-late'}">${result}</strong></div>`:''}</div><label>Descrição</label><p>${t.description}</p><h3>Andamento</h3><div class="timeline"><div class="event"><strong>Chamado criado</strong><time>${formatDate(t.openedAt)}</time></div>${t.responsible?`<div class="event"><strong>Capturado por ${t.responsible}</strong><time>Atualização registrada no ambiente de teste</time></div>`:''}${t.status==='Concluído'?`<div class="event"><strong>Chamado concluído · ${result}</strong><time>${formatDate(t.closedAt)}</time></div>`:''}</div></section>`)}
+function detail(){
+
+    const t = tickets().find(
+        x => x.id === state.selected
+    );
+
+    if(!t)
+        return mine();
+
+    const tech =
+        state.user.role === 'technician';
+
+    const result =
+        slaResult(t);
+
+    const canFinish =
+        tech &&
+        t.responsible === state.user.name &&
+        t.status !== 'Concluído';
+
+    return shell(`
+        <div class="page-head">
+
+            <div>
+
+                <button
+                    class="ticket-link"
+                    data-view="${tech ? 'queue' : 'mine'}"
+                >
+                    ← Voltar
+                </button>
+
+                <h2 style="margin-top:12px">
+                    Chamado #2026-${t.id}
+                </h2>
+
+                <p>
+                    ${badge(t.status)}
+                </p>
+
+            </div>
+
+            ${canFinish ? `
+                <div
+                    style="
+                        display:flex;
+                        flex-direction:column;
+                        gap:10px;
+                        min-width:320px;
+                    "
+                >
+
+                    <label for="solution">
+                        Solução / procedimento realizado
+                    </label>
+
+                    <textarea
+                        id="solution"
+                        rows="4"
+                        placeholder="Descreva o que foi feito para resolver o chamado..."
+                    >${t.solution || ''}</textarea>
+
+                    <button
+                        class="primary"
+                        id="finish"
+                    >
+                        Concluir chamado
+                    </button>
+
+                </div>
+            ` : ''}
+
+        </div>
+
+        <section class="card">
+
+            <div class="detail-grid">
+
+                <div>
+                    <span>Solicitante</span>
+                    <strong>${t.requester}</strong>
+                </div>
+
+                <div>
+                    <span>Serviço</span>
+                    <strong>${t.service}</strong>
+                </div>
+
+                <div>
+                    <span>Subcategoria</span>
+                    <strong>${t.subcategory}</strong>
+                </div>
+
+                <div>
+                    <span>Tipo</span>
+                    <strong>${t.type}</strong>
+                </div>
+
+                <div>
+                    <span>Prioridade / SLA</span>
+                    <strong>
+                        ${t.priority} · ${t.sla} horas
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Responsável</span>
+                    <strong>
+                        ${t.responsible || 'Não atribuído'}
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Prazo limite</span>
+                    <strong>
+                        ${formatDate(deadline(t))}
+                    </strong>
+                </div>
+
+                ${t.closedAt ? `
+                    <div>
+                        <span>Encerrado em</span>
+                        <strong>
+                            ${formatDate(t.closedAt)}
+                        </strong>
+                    </div>
+
+                    <div>
+                        <span>Resultado da SLA</span>
+                        <strong
+                            class="${result === 'Dentro da SLA'
+                                ? 'sla-ok'
+                                : 'sla-late'}"
+                        >
+                            ${result}
+                        </strong>
+                    </div>
+                ` : ''}
+
+            </div>
+
+            <label>
+                Descrição
+            </label>
+
+            <p>
+                ${t.description}
+            </p>
+
+            ${t.solution ? `
+                <label>
+                    Solução / procedimento realizado
+                </label>
+
+                <p>
+                    ${t.solution}
+                </p>
+            ` : ''}
+
+            <h3>
+                Andamento
+            </h3>
+
+            <div class="timeline">
+
+                <div class="event">
+
+                    <strong>
+                        Chamado criado
+                    </strong>
+
+                    <time>
+                        ${formatDate(t.openedAt)}
+                    </time>
+
+                </div>
+
+                ${t.responsible ? `
+                    <div class="event">
+
+                        <strong>
+                            Capturado por ${t.responsible}
+                        </strong>
+
+                        <time>
+                            Atualização registrada no ambiente de teste
+                        </time>
+
+                    </div>
+                ` : ''}
+
+                ${t.status === 'Concluído' ? `
+                    <div class="event">
+
+                        <strong>
+                            Chamado concluído · ${result}
+                        </strong>
+
+                        <time>
+                            ${formatDate(t.closedAt)}
+                        </time>
+
+                    </div>
+                ` : ''}
+
+            </div>
+
+        </section>
+    `);
+}
 function render(){let page=!state.user?login():state.view==='new'?newTicket():state.view==='mine'?mine():state.view==='queue'?queue():state.view==='users'?usersPage():detail();$('#app').innerHTML=page;bind()}
 function updateForm(){const sub=$('#subcategory')?.value,priority=document.querySelector('input[name="priority"]:checked')?.value;if(!sub)return;const type=typeFor(sub);$('#type').value=type;$('#sla').value=priority?`${slas[type][priority]} horas`:'Selecione uma prioridade'}
 function bind(){
 
+    console.log('BIND EXECUTADO', state.user);
+
     if(!state.user){
 
-        $('#login-form').onsubmit = async e => {
-            e.preventDefault();
+        const loginForm = $('#login-form');
 
-            const email = $('#email').value.trim();
-            const password = $('#password').value;
+        if(loginForm){
 
-            const error = $('#login-error');
+            loginForm.onsubmit = async e => {
 
-            error.innerHTML = '';
+                e.preventDefault();
 
-            try {
+                const email = $('#email').value.trim();
+                const password = $('#password').value;
 
-                await signInWithEmailAndPassword(
-                    auth,
-                    email,
-                    password
-                );
+                const error = $('#login-error');
 
-            } catch (err) {
+                error.innerHTML = '';
 
-                console.error(err);
+                try {
 
-                let message = 'Não foi possível realizar o login.';
+                    await signInWithEmailAndPassword(
+                        auth,
+                        email,
+                        password
+                    );
 
-                if(
-                    err.code === 'auth/invalid-credential' ||
-                    err.code === 'auth/wrong-password' ||
-                    err.code === 'auth/user-not-found'
-                ){
-                    message = 'E-mail ou senha inválidos.';
+                } catch(err) {
+
+                    console.error(
+                        'Erro no login:',
+                        err
+                    );
+
+                    let message =
+                        'Não foi possível realizar o login.';
+
+                    if(
+                        err.code === 'auth/invalid-credential' ||
+                        err.code === 'auth/wrong-password' ||
+                        err.code === 'auth/user-not-found'
+                    ){
+                        message =
+                            'E-mail ou senha inválidos.';
+                    }
+
+                    if(err.code === 'auth/too-many-requests'){
+                        message =
+                            'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+                    }
+
+                    error.innerHTML = `
+                        <div class="message error">
+                            ${message}
+                        </div>
+                    `;
                 }
+            };
+        }
 
-                if(err.code === 'auth/too-many-requests'){
-                    message = 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+        const googleLogin = $('#google-login');
+
+        if(googleLogin){
+
+            googleLogin.onclick = async () => {
+
+                const error = $('#login-error');
+
+                error.innerHTML = '';
+
+                try {
+
+                    await signInWithPopup(
+                        auth,
+                        googleProvider
+                    );
+
+                } catch(err) {
+
+                    console.error(
+                        'Erro no login Google:',
+                        err
+                    );
+
+                    let message =
+                        'Não foi possível entrar com o Google.';
+
+                    if(
+                        err.code ===
+                        'auth/popup-closed-by-user'
+                    ){
+                        message =
+                            'A janela de login foi fechada.';
+                    }
+
+                    error.innerHTML = `
+                        <div class="message error">
+                            ${message}
+                        </div>
+                    `;
                 }
-
-                error.innerHTML = `
-                    <div class="message error">
-                        ${message}
-                    </div>
-                `;
-            }
-        };
-
-        $('#google-login').onclick = async () => {
-
-            const error = $('#login-error');
-
-            error.innerHTML = '';
-
-            try {
-
-                await signInWithPopup(
-                    auth,
-                    googleProvider
-                );
-
-            } catch (err) {
-
-                console.error(err);
-
-                let message = 'Não foi possível entrar com o Google.';
-
-                if(err.code === 'auth/popup-closed-by-user'){
-                    message = 'A janela de login foi fechada.';
-                }
-
-                error.innerHTML = `
-                    <div class="message error">
-                        ${message}
-                    </div>
-                `;
-            }
-        };
+            };
+        }
 
         return;
     }
 
+    /*
+     * A partir daqui o usuário já está autenticado.
+     */
+
     $('#logout').onclick = async () => {
 
         try {
+
             await signOut(auth);
+
         } catch(err) {
+
             console.error(err);
         }
 
@@ -242,127 +510,281 @@ function bind(){
         render();
     };
 
-    document.querySelectorAll('[data-view]').forEach(b =>
-        b.onclick = () => {
-            state.view = b.dataset.view;
-            state.selected = null;
-            render();
-        }
-    );
+    document
+        .querySelectorAll('[data-view]')
+        .forEach(b =>
+            b.onclick = () => {
 
-    document.querySelectorAll('[data-ticket]').forEach(b =>
-        b.onclick = () => {
-            state.selected = Number(b.dataset.ticket);
-            state.view = 'detail';
-            render();
-        }
-    );
+                state.view = b.dataset.view;
+                state.selected = null;
+
+                render();
+            }
+        );
+
+    document
+        .querySelectorAll('[data-ticket]')
+        .forEach(b =>
+            b.onclick = () => {
+
+                state.selected = Number(
+                    b.dataset.ticket
+                );
+
+                state.view = 'detail';
+
+                render();
+            }
+        );
 
     document.querySelectorAll('[data-capture]').forEach(b =>
-        b.onclick = () => {
-            const list = tickets();
-            const t = list.find(x => x.id === Number(b.dataset.capture));
+    b.onclick = async () => {
 
-            t.responsible = state.user.name;
-            t.status = 'Em análise';
+        const t = state.tickets.find(
+            x => x.id === Number(b.dataset.capture)
+        );
 
-            save(list);
-            render();
+        if (!t) {
+            console.error('Chamado não encontrado:', b.dataset.capture);
+            return;
         }
-    );
+
+        try {
+
+            await updateDoc(
+                doc(db, 'tickets', t.firestoreId),
+                {
+                    responsible: state.user.name,
+                    status: 'Em análise'
+                }
+            );
+
+            await loadTickets();
+
+            render();
+
+        } catch (err) {
+
+            console.error(
+                'Erro ao capturar chamado:',
+                err
+            );
+
+            alert(
+                'Não foi possível capturar o chamado. ' +
+                'Verifique o acesso ao Firestore.'
+            );
+        }
+    }
+);
 
     if($('#user-form'))
         $('#user-form').onsubmit = e => {
+
             e.preventDefault();
 
             const list = directory();
-            const username = $('#new-username').value.trim().toLowerCase();
 
-            if(list.some(u => u.username === username)){
-                alert('Este usuário já está cadastrado.');
+            const username =
+                $('#new-username')
+                    .value
+                    .trim()
+                    .toLowerCase();
+
+            if(
+                list.some(
+                    u => u.username === username
+                )
+            ){
+                alert(
+                    'Este usuário já está cadastrado.'
+                );
+
                 return;
             }
 
             list.push({
                 username,
-                password: $('#new-password').value,
-                name: $('#new-name').value.trim(),
-                unit: $('#new-unit').value.trim(),
-                department: $('#new-department').value.trim()
+                password:
+                    $('#new-password').value,
+                name:
+                    $('#new-name')
+                        .value
+                        .trim(),
+                unit:
+                    $('#new-unit')
+                        .value
+                        .trim(),
+                department:
+                    $('#new-department')
+                        .value
+                        .trim()
             });
 
             saveDirectory(list);
+
             render();
         };
+
+    /*
+     * Formulário de criação de chamado
+     */
+
+    const ticketForm = $('#ticket-form');
+
+    if(ticketForm){
+
+        ticketForm.onsubmit = async e => {
+
+            e.preventDefault();
+
+            const service =
+                $('#service').value;
+
+            const subcategory =
+                $('#subcategory').value;
+
+            const priority =
+                document.querySelector(
+                    'input[name="priority"]:checked'
+                )?.value;
+
+            if(!priority){
+
+                alert(
+                    'Selecione uma prioridade.'
+                );
+
+                return;
+            }
+
+            const type =
+                typeFor(subcategory);
+
+            const list =
+                tickets();
+
+            const id =
+                Math.max(
+                    ...list.map(x => x.id),
+                    1000
+                ) + 1;
+
+            const ticket = {
+
+                id,
+
+                requester:
+                    state.user.username,
+
+                service,
+
+                subcategory,
+
+                type,
+
+                priority,
+
+                sla:
+                    slas[type][priority],
+
+                status:
+                    'Aberto',
+
+                responsible:
+                    null,
+
+                openedAt:
+                    new Date().toISOString(),
+
+                description:
+                    $('#description').value
+            };
+
+            try {
+
+                await addDoc(
+                    collection(
+                        db,
+                        'tickets'
+                    ),
+                    ticket
+                );
+
+                await loadTickets();
+
+                showSuccess(ticket);
+
+            } catch(err) {
+
+                console.error(
+                    'Erro ao criar chamado:',
+                    err
+                );
+
+                alert(
+                    'Não foi possível criar o chamado. ' +
+                    'Verifique o acesso ao Firestore.'
+                );
+            }
+        };
+    }
 
     if($('#service')){
 
         $('#service').onchange = e => {
 
-            const subs = catalog[e.target.value] || [];
+            const subs =
+                catalog[e.target.value] || [];
 
-            $('#subcategory').disabled = !subs.length;
+            $('#subcategory').disabled =
+                !subs.length;
 
             $('#subcategory').innerHTML =
                 '<option value="">Selecione uma subcategoria</option>' +
-                subs.map(x => `<option>${x}</option>`).join('');
+                subs
+                    .map(
+                        x => `<option>${x}</option>`
+                    )
+                    .join('');
 
             updateForm();
         };
 
-        $('#subcategory').onchange = updateForm;
+        $('#subcategory').onchange =
+            updateForm;
 
         document
-            .querySelectorAll('input[name="priority"]')
-            .forEach(x => x.onchange = updateForm);
-
-        $('#ticket-form').onsubmit = e => {
-
-            e.preventDefault();
-
-            const service = $('#service').value;
-            const subcategory = $('#subcategory').value;
-            const priority =
-                document.querySelector('input[name="priority"]:checked').value;
-
-            const type = typeFor(subcategory);
-            const list = tickets();
-
-            const id =
-                Math.max(...list.map(x => x.id), 1000) + 1;
-
-            const ticket = {
-                id,
-                requester: state.user.username,
-                service,
-                subcategory,
-                type,
-                priority,
-                sla: slas[type][priority],
-                status: 'Aberto',
-                responsible: null,
-                openedAt: new Date().toISOString(),
-                description: $('#description').value
-            };
-
-            list.push(ticket);
-
-            save(list);
-
-            showSuccess(ticket);
-        };
+            .querySelectorAll(
+                'input[name="priority"]'
+            )
+            .forEach(
+                x =>
+                    x.onchange =
+                        updateForm
+            );
     }
 
     if($('#finish'))
         $('#finish').onclick = () => {
 
-            const list = tickets();
-            const t = list.find(x => x.id === state.selected);
+            const list =
+                tickets();
 
-            t.status = 'Concluído';
-            t.closedAt = new Date().toISOString();
+            const t =
+                list.find(
+                    x =>
+                        x.id === state.selected
+                );
+
+            t.status =
+                'Concluído';
+
+            t.closedAt =
+                new Date().toISOString();
 
             save(list);
+
             render();
         };
 }
@@ -424,6 +846,8 @@ onAuthStateChanged(auth, async user => {
             state.user.role === 'technician'
                 ? 'queue'
                 : 'new';
+
+                await loadTickets();
 
         render();
 
