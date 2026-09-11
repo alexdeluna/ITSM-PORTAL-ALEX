@@ -1,4 +1,3 @@
-//nova
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
 
 import {
@@ -12,8 +11,12 @@ import {
 
 import {
     getFirestore,
+    collection,
     doc,
-    getDoc
+    getDoc,
+    getDocs,
+    addDoc,
+    updateDoc
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 import { firebaseConfig } from "./firebase-config.js";
@@ -30,8 +33,12 @@ export {
     auth,
     db,
     googleProvider,
+    collection,
     doc,
     getDoc,
+    getDocs,
+    addDoc,
+    updateDoc,
     signInWithEmailAndPassword,
     signInWithPopup,
     onAuthStateChanged,
