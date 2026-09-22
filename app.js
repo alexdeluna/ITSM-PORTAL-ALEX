@@ -646,7 +646,7 @@ function table(list, tech) {
         </div>
     `;
 }
-function queue(){const list=tickets().sort((a,b)=>new Date(a.openedAt)-new Date(b.openedAt));return shell(`<div class="page-head"><div><h2>Fila de chamados</h2><p>Chamados em ordem de abertura. Capture um ticket para assumir o atendimento.</p></div></div><section class="card">${table(list,true)}</section>`)}
+function queue(){const list=tickets().sort((a,b)=>new Date(b.openedAt)-new Date(a.openedAt));return shell(`<div class="page-head"><div><h2>Fila de chamados</h2><p>Chamados em ordem de abertura. Capture um ticket para assumir o atendimento.</p></div></div><section class="card">${table(list,true)}</section>`)}
 function usersPage(){const list=directory();return shell(`<div class="page-head"><div><h2>Cadastro de usuários</h2><p>Base local que simula a futura consulta ao Active Directory.</p></div></div><section class="card"><h3 style="margin-top:0">Adicionar usuário</h3><form id="user-form"><div class="form-grid"><div><label>Usuário (AD)</label><input id="new-username" required placeholder="nome.sobrenome"></div><div><label>Senha de acesso</label><input id="new-password" type="password" required placeholder="Defina uma senha"></div><div><label>Nome completo</label><input id="new-name" required placeholder="Nome do colaborador"></div><div><label>Unidade</label><input id="new-unit" required placeholder="Ex.: Matriz"></div><div class="full"><label>Departamento</label><input id="new-department" required placeholder="Ex.: Financeiro"></div></div><div class="actions"><button class="primary">Cadastrar usuário</button></div></form></section><section class="card" style="margin-top:24px"><h3 style="margin-top:0">Usuários cadastrados</h3><div class="table-wrap"><table class="tickets"><thead><tr><th>Usuário</th><th>Nome</th><th>Unidade</th><th>Departamento</th><th>Acesso</th></tr></thead><tbody>${list.map(u=>`<tr><td><strong>${u.username}</strong></td><td>${u.name}</td><td>${u.unit}</td><td>${u.department}</td><td><span class="badge done">Ativo</span></td></tr>`).join('')}</tbody></table></div></section>`)}
 
 function adminPage(){
@@ -3371,43 +3371,53 @@ const ticket = {
         };
     }
 
-   $('#service').onchange = e => {
+       if(
+        $('#service') &&
+        $('#subcategory')
+    ){
 
-    const service =
-        state.services.find(
-            item =>
-                item.name === e.target.value
-        );
+        $('#service').onchange = e => {
 
-    const subs =
-        service?.subcategories || [];
+            const service =
+                state.services.find(
+                    item =>
+                        item.name === e.target.value
+                );
 
-    const activeSubs =
-        subs.filter(
-            subcategory =>
-                service.subcategoryStatus?.[subcategory] !== false
-        );
+            const subs =
+                service?.subcategories || [];
 
-    $('#subcategory').disabled =
-        !activeSubs.length;
+            const activeSubs =
+                subs.filter(
+                    subcategory =>
+                        service.subcategoryStatus?.[subcategory] !== false
+                );
 
-    $('#subcategory').innerHTML =
-        '<option value="">Selecione uma subcategoria</option>' +
-        activeSubs
-            .map(
-                subcategory =>
-                    `<option value="${subcategory}">
-                        ${subcategory}
-                    </option>`
-            )
-            .join('');
+            $('#subcategory').disabled =
+                !activeSubs.length;
 
-    updateForm();
-};
+            $('#subcategory').innerHTML =
+                '<option value="">Selecione uma subcategoria</option>' +
+                activeSubs
+                    .map(
+                        subcategory =>
+                            `<option value="${subcategory}">
+                                ${subcategory}
+                            </option>`
+                    )
+                    .join('');
+
+            updateForm();
+        };
+           
+        if($('#subcategory')){
 
     $('#subcategory').onchange =
         updateForm;
-
+}
+    
+    }
+    
     if($('#finish')){
   $('#finish').onclick = async () => {
     const t = tickets().find(x => x.id === state.selected);
