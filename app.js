@@ -420,16 +420,23 @@ function shell(content){
 
     if(admin){
 
-        navigation = `
-            <button
-                class="nav ${state.view === 'admin' ? 'active' : ''}"
-                data-view="admin"
-            >
-                Administração
-            </button>
-        `;
+    navigation = `
+        <button
+            class="nav ${state.view === 'admin' ? 'active' : ''}"
+            data-view="admin"
+        >
+            Administração
+        </button>
 
-    }else if(tech){
+        <button
+            class="nav ${state.view === 'queue' ? 'active' : ''}"
+            data-view="queue"
+        >
+            Fila de chamados
+        </button>
+    `;
+
+}else if(tech){
 
         navigation = `
             <button
