@@ -143,11 +143,175 @@ function directory(){const stored=localStorage.getItem('itsm-demo-users');if(!st
 function saveDirectory(list){localStorage.setItem('itsm-demo-users',JSON.stringify(list))}
 function formatDate(v){const d=new Date(v);return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${String(d.getFullYear()).slice(2)} ${pad(d.getHours())}:${pad(d.getMinutes())}`}
 
+function ajustarInicioSLA(data){
+
+    const d = new Date(data);
+
+    while(true){
+
+        const dia =
+            d.getDay();
+
+        // Sábado ou domingo
+        if(dia === 0 || dia === 6){
+
+            d.setDate(
+                d.getDate() +
+                (dia === 6 ? 2 : 1)
+            );
+
+            d.setHours(
+                8,
+                0,
+                0,
+                0
+            );
+
+            continue;
+        }
+
+        // Antes das 08:00
+        if(d.getHours() < 8){
+
+            d.setHours(
+                8,
+                0,
+                0,
+                0
+            );
+
+            return d;
+        }
+
+        // Às 18:00 ou depois
+        if(
+            d.getHours() > 18 ||
+            (
+                d.getHours() === 18 &&
+                (
+                    d.getMinutes() > 0 ||
+                    d.getSeconds() > 0 ||
+                    d.getMilliseconds() > 0
+                )
+            )
+        ){
+
+            d.setDate(
+                d.getDate() + 1
+            );
+
+            d.setHours(
+                8,
+                0,
+                0,
+                0
+            );
+
+            continue;
+        }
+
+        return d;
+    }
+}
+
+
+function adicionarHorasUteis(
+    inicio,
+    horas
+){
+
+    let d =
+        ajustarInicioSLA(
+            inicio
+        );
+
+    let restantes =
+        Number(horas);
+
+    while(restantes > 0){
+
+        const dia =
+            d.getDay();
+
+        // Fim de semana
+        if(
+            dia === 0 ||
+            dia === 6
+        ){
+
+            d =
+                ajustarInicioSLA(
+                    d
+                );
+
+            continue;
+        }
+
+        const fimExpediente =
+            new Date(d);
+
+        fimExpediente.setHours(
+            18,
+            0,
+            0,
+            0
+        );
+
+        const horasDisponiveis =
+            (
+                fimExpediente.getTime() -
+                d.getTime()
+            ) /
+            (
+                60 * 60 * 1000
+            );
+
+        if(
+            restantes <=
+            horasDisponiveis
+        ){
+
+            d.setTime(
+                d.getTime() +
+                restantes *
+                60 *
+                60 *
+                1000
+            );
+
+            restantes = 0;
+
+        }else{
+
+            restantes -=
+                horasDisponiveis;
+
+            d.setDate(
+                d.getDate() + 1
+            );
+
+            d.setHours(
+                8,
+                0,
+                0,
+                0
+            );
+
+            d =
+                ajustarInicioSLA(
+                    d
+                );
+        }
+    }
+
+    return d;
+}
+
+
 function deadline(t){
 
     if(
         !t ||
-        !t.openedAt ||
         !Number.isFinite(
             Number(t.sla)
         ) ||
@@ -157,10 +321,172 @@ function deadline(t){
         return null;
     }
 
-    return new Date(
-        new Date(t.openedAt).getTime() +
-        Number(t.sla) * 60 * 60 * 1000
+    /*
+     * Chamado que já foi retomado após uma pendência.
+     *
+     * O SLA continua a partir do momento da retomada,
+     * utilizando apenas o tempo restante calculado antes.
+     */
+    if(
+        Number.isFinite(
+            Number(t.slaRemainingMinutes)
+        ) &&
+        Number(t.slaRemainingMinutes) > 0 &&
+        t.slaResumeAt
+    ){
+
+        return adicionarHorasUteis(
+            t.slaResumeAt,
+            Number(t.slaRemainingMinutes) / 60
+        );
+    }
+
+    /*
+     * Chamados antigos ou que ainda não passaram
+     * por uma pendência continuam utilizando
+     * o cálculo original.
+     */
+    if(!t.openedAt){
+
+        return null;
+    }
+
+    return adicionarHorasUteis(
+        t.openedAt,
+        Number(t.sla)
     );
+}
+
+function horasUteisEntre(
+    inicio,
+    fim
+){
+
+    const inicioDate =
+        new Date(inicio);
+
+    const fimDate =
+        new Date(fim);
+
+    if(
+        Number.isNaN(
+            inicioDate.getTime()
+        ) ||
+        Number.isNaN(
+            fimDate.getTime()
+        ) ||
+        fimDate <= inicioDate
+    ){
+
+        return 0;
+    }
+
+    let totalHoras = 0;
+
+    const diaAtual =
+        new Date(inicioDate);
+
+    diaAtual.setHours(
+        0,
+        0,
+        0,
+        0
+    );
+
+    while(
+        diaAtual <= fimDate
+    ){
+
+        const dia =
+            diaAtual.getDay();
+
+        // Sábado e domingo não contam
+        if(
+            dia !== 0 &&
+            dia !== 6
+        ){
+
+            const inicioExpediente =
+                new Date(diaAtual);
+
+            inicioExpediente.setHours(
+                8,
+                0,
+                0,
+                0
+            );
+
+            const fimExpediente =
+                new Date(diaAtual);
+
+            fimExpediente.setHours(
+                18,
+                0,
+                0,
+                0
+            );
+
+            const inicioContagem =
+                inicioDate > inicioExpediente
+                    ? inicioDate
+                    : inicioExpediente;
+
+            const fimContagem =
+                fimDate < fimExpediente
+                    ? fimDate
+                    : fimExpediente;
+
+            if(
+                fimContagem >
+                inicioContagem
+            ){
+
+                totalHoras +=
+                    (
+                        fimContagem.getTime() -
+                        inicioContagem.getTime()
+                    ) /
+                    (
+                        60 * 60 * 1000
+                    );
+            }
+        }
+
+        diaAtual.setDate(
+            diaAtual.getDate() + 1
+        );
+    }
+
+    return totalHoras;
+}
+
+function criarRegistroPendencia(
+    reason,
+    description,
+    responsible
+){
+
+    return {
+
+        reason,
+
+        description:
+            description || '',
+
+        responsible,
+
+        startedAt:
+            new Date().toISOString(),
+
+        endedAt:
+            null,
+
+        totalMinutes:
+            null,
+
+        usefulMinutes:
+            null
+    };
 }
 
 function slaResult(t){
@@ -181,6 +507,30 @@ function slaResult(t){
         : 'Em atraso';
 }
 
+function formatarTempoSLA(horas){
+
+    const minutos =
+        Math.max(
+            0,
+            Math.round(
+                Number(horas) * 60
+            )
+        );
+
+    const horasInteiras =
+        Math.floor(
+            minutos / 60
+        );
+
+    const minutosRestantes =
+        minutos % 60;
+
+    return `
+        ${horasInteiras}h
+        ${minutosRestantes}min
+    `;
+}
+
 function slaInfo(t){
 
     const result =
@@ -192,16 +542,77 @@ function slaInfo(t){
             <strong class="${result === 'Dentro da SLA'
                 ? 'sla-ok'
                 : 'sla-late'}">
+
                 ${result}
+
             </strong>
 
             <br>
 
             <span class="muted">
+
                 Encerrado:
                 ${formatDate(t.closedAt)}
+
             </span>
         `;
+    }
+
+    /*
+     * Chamado atualmente pendente
+     */
+
+    if(
+        t.status === 'Pendente' &&
+        Array.isArray(t.pendingHistory)
+    ){
+
+        const pendenciaAtual =
+            [...t.pendingHistory]
+                .reverse()
+                .find(
+                    item =>
+                        !item.endedAt
+                );
+
+        if(pendenciaAtual){
+
+            const limit =
+                deadline(t);
+
+            if(limit){
+
+                const horasRestantes =
+                    horasUteisEntre(
+                        pendenciaAtual.startedAt,
+                        limit
+                    );
+
+                return `
+                    <strong>
+                        SLA pausada
+                    </strong>
+
+                    <br>
+
+                    <span class="muted">
+                        Desde:
+                        ${formatDate(
+                            pendenciaAtual.startedAt
+                        )}
+                    </span>
+
+                    <br>
+
+                    <span class="muted">
+                        Restante:
+                        ${formatarTempoSLA(
+                            horasRestantes
+                        )}
+                    </span>
+                `;
+            }
+        }
     }
 
     const limit =
@@ -223,9 +634,30 @@ function slaInfo(t){
         </span>
     `;
 }
-
 function typeFor(sub){return requisitions.includes(sub)?'Requisição':'Incidente'}
-function badge(status){return `<span class="badge ${status==='Aberto'?'open':status==='Em análise'?'analysis':'done'}">${status}</span>`}
+function badge(status){
+
+    let classe = 'done';
+
+    if(status === 'Aberto'){
+
+        classe = 'open';
+
+    }else if(status === 'Em análise'){
+
+        classe = 'analysis';
+
+    }else if(status === 'Pendente'){
+
+        classe = 'pending';
+    }
+
+    return `
+        <span class="badge ${classe}">
+            ${status}
+        </span>
+    `;
+}
 function login(){
     return `
         <main class="login">
@@ -620,26 +1052,36 @@ function table(list, tech) {
                                                     </td>
 
                                                     <td>
-                                                        ${
-                                                            !t.responsible
-                                                                ? `
-                                                                    <button
-                                                                        class="primary capture"
-                                                                        data-capture="${t.id}"
-                                                                    >
-                                                                        Capturar
-                                                                    </button>
-                                                                `
-                                                                : `
-                                                                    <button
-                                                                        class="secondary"
-                                                                        data-ticket="${t.id}"
-                                                                    >
-                                                                        Visualizar
-                                                                    </button>
-                                                                `
-                                                        }
-                                                    </td>
+    ${
+        !t.responsible
+            ? `
+                <button
+                    class="primary capture"
+                    data-capture="${t.id}"
+                >
+                    Capturar
+                </button>
+            `
+            : t.responsible !== state.user.name &&
+t.status !== 'Concluído'
+    ? `
+        <button
+            class="primary assume"
+            data-assume="${t.id}"
+        >
+            Assumir atendimento
+        </button>
+    `
+                : `
+                    <button
+                        class="secondary"
+                        data-ticket="${t.id}"
+                    >
+                        Visualizar
+                    </button>
+                `
+    }
+</td>
                                                 `
                                                 : ''
                                         }
@@ -1819,6 +2261,16 @@ function detail(){
         t.responsible === state.user.name &&
         t.status !== 'Concluído';
 
+    const canPending =
+    tech &&
+    t.responsible === state.user.name &&
+    t.status === 'Em análise';    
+
+    const canResume =
+    tech &&
+    t.responsible === state.user.name &&
+    t.status === 'Pendente';
+
     return shell(`
         <div class="page-head">
 
@@ -1841,7 +2293,7 @@ function detail(){
 
             </div>
 
-            ${canFinish ? `
+            ${canFinish || canPending || canResume ? `
                 <div
                     style="
                         display:flex;
@@ -1858,6 +2310,28 @@ function detail(){
                     <textarea id="solution" rows="4" minlength="15"
                         placeholder="Descreva o que foi feito para resolver o chamado..."
                     >${t.solution || ''}</textarea>
+
+                    
+
+                    ${canPending ? `
+    <button
+        class="secondary"
+        id="pending"
+        type="button"
+    >
+        Colocar em Pendente
+    </button>
+` : ''}
+
+${canResume ? `
+    <button
+        class="primary"
+        id="resume-pending"
+        type="button"
+    >
+        Retomar atendimento
+    </button>
+` : ''}
 
                     <button
                         class="primary"
@@ -2735,11 +3209,20 @@ if(addEditSubcategory){
         try {
 
             await updateDoc(
-                doc(db, 'tickets', t.firestoreId),
-                {
-                    responsible: state.user.name,
-                    status: 'Em análise'
-                }
+        doc(db, 'tickets', t.firestoreId),
+        {
+        responsible: state.user.name,
+        status: 'Em análise',
+        responsibilityHistory: [
+            ...(t.responsibilityHistory || []),
+            {
+                action: 'captura',
+                from: t.responsible || null,
+                to: state.user.name,
+                date: new Date().toISOString()
+            }
+        ]
+        }
             );
 
             await loadTickets();
@@ -2761,7 +3244,78 @@ if(addEditSubcategory){
     }
     );
 
-    if($('#user-form'))
+    document
+    .querySelectorAll('[data-assume]')
+    .forEach(b =>
+        b.onclick = async () => {
+
+            const t = state.tickets.find(
+                x => x.id === Number(b.dataset.assume)
+            );
+
+            if(!t){
+
+                console.error(
+                    'Chamado não encontrado:',
+                    b.dataset.assume
+                );
+
+                return;
+            }
+
+            if(
+    !t.responsible ||
+    t.responsible === state.user.name ||
+    t.status === 'Concluído'
+){
+
+    return;
+}
+
+            try{
+
+                await updateDoc(
+                    doc(
+                        db,
+                        'tickets',
+                        t.firestoreId
+                    ),
+                    {
+                        responsible: state.user.name,
+                        status: 'Em análise',
+
+                        responsibilityHistory: [
+                            ...(t.responsibilityHistory || []),
+                            {
+                                action: 'transferência',
+                                from: t.responsible,
+                                to: state.user.name,
+                                date: new Date().toISOString()
+                            }
+                        ]
+                    }
+                );
+
+                await loadTickets();
+
+                render();
+
+            }catch(err){
+
+                console.error(
+                    'Erro ao assumir atendimento:',
+                    err
+                );
+
+                alert(
+                    'Não foi possível assumir o atendimento. ' +
+                    'Verifique o acesso ao Firestore.'
+                );
+            }
+        }
+    );
+
+        if($('#user-form'))
         $('#user-form').onsubmit = e => {
 
             e.preventDefault();
@@ -2809,9 +3363,9 @@ if(addEditSubcategory){
             render();
         };
 
-    const editUserForm = $('#edit-user-form');
+        const editUserForm = $('#edit-user-form');
 
-    if(editUserForm){
+        if(editUserForm){
 
         editUserForm.onsubmit = async e => {
 
@@ -3342,6 +3896,9 @@ const ticket = {
     responsible:
         null,
 
+        pendingHistory:
+        [],
+
     openedAt:
         new Date().toISOString(),
 
@@ -3425,6 +3982,212 @@ const ticket = {
     
     }
     
+if($('#resume-pending')){
+
+    $('#resume-pending').onclick =
+        async () => {
+
+            const t =
+                tickets().find(
+                    x =>
+                        x.id ===
+                        state.selected
+                );
+
+            if(!t){
+
+                alert(
+                    'Chamado não encontrado.'
+                );
+
+                return;
+            }
+
+            if(
+                t.status !== 'Pendente' ||
+                t.responsible !==
+                    state.user.name
+            ){
+
+                alert(
+                    'Este chamado não está disponível para retomada.'
+                );
+
+                return;
+            }
+
+            const pendingIndex =
+                Array.isArray(
+                    t.pendingHistory
+                )
+                    ? t.pendingHistory
+                        .map(
+                            (item, index) => ({
+                                item,
+                                index
+                            })
+                        )
+                        .reverse()
+                        .find(
+                            x =>
+                                !x.item.endedAt
+                        )
+                    : null;
+
+            if(!pendingIndex){
+
+                alert(
+                    'Não foi encontrada uma pendência ativa para este chamado.'
+                );
+
+                return;
+            }
+
+            const now =
+                new Date();
+
+            const startedAt =
+                new Date(
+                    pendingIndex.item.startedAt
+                );
+
+            const totalMinutes =
+                Math.max(
+                    0,
+                    Math.round(
+                        (
+                            now.getTime() -
+                            startedAt.getTime()
+                        ) / 60000
+                    )
+                );
+
+            const limit =
+                deadline(t);
+
+            let slaRemainingMinutes =
+                null;
+
+            if(limit){
+
+                const current =
+                    new Date(
+                        startedAt
+                    );
+
+                let minutes = 0;
+
+                while(
+                    current < limit
+                ){
+
+                    const day =
+                        current.getDay();
+
+                    const hour =
+                        current.getHours();
+
+                    if(
+                        day >= 1 &&
+                        day <= 5 &&
+                        hour >= 8 &&
+                        hour < 18
+                    ){
+
+                        minutes++;
+                    }
+
+                    current.setMinutes(
+                        current.getMinutes() + 1
+                    );
+                }
+
+                slaRemainingMinutes =
+                    Math.max(
+                        0,
+                        minutes
+                    );
+            }
+
+            const pendingHistory =
+                [...t.pendingHistory];
+
+            pendingHistory[
+                pendingIndex.index
+            ] = {
+
+                ...pendingHistory[
+                    pendingIndex.index
+                ],
+
+                endedAt:
+                    now.toISOString(),
+
+                totalMinutes,
+
+                usefulMinutes:
+                    0,
+
+                resumedBy:
+                    state.user.name
+            };
+
+            const button =
+                $('#resume-pending');
+
+            button.disabled =
+                true;
+
+            button.textContent =
+                'Retomando...';
+
+            try{
+
+                await updateDoc(
+                    doc(
+                        db,
+                        'tickets',
+                        t.firestoreId
+                    ),
+                    {
+
+                        status:
+                            'Em análise',
+
+                        pendingHistory,
+
+                        slaRemainingMinutes,
+
+                        slaResumeAt:
+                            now.toISOString()
+                    }
+                );
+
+                await loadTickets();
+
+                render();
+
+            }catch(err){
+
+                console.error(
+                    'Erro ao retomar chamado:',
+                    err
+                );
+
+                button.disabled =
+                    false;
+
+                button.textContent =
+                    'Retomar atendimento';
+
+                alert(
+                    'Não foi possível retomar o chamado. ' +
+                    'Verifique o acesso ao Firestore.'
+                );
+            }
+        };
+}
+
     if($('#finish')){
   $('#finish').onclick = async () => {
     const t = tickets().find(x => x.id === state.selected);
@@ -3483,6 +4246,232 @@ const ticket = {
     }
   };
     }
+if($('#pending')){
+
+    $('#pending').onclick = () => {
+
+        const modal =
+            document.createElement('div');
+
+        modal.className =
+            'modal';
+
+        modal.innerHTML = `
+            <div class="modal-box">
+
+                <h2>
+                    Colocar chamado em Pendente
+                </h2>
+
+                <div>
+
+                    <label for="pending-reason">
+                        Motivo da pendência
+                    </label>
+
+                    <select id="pending-reason">
+
+                        <option value="">
+                            Selecione o motivo
+                        </option>
+
+                        <option value="Usuário não encontrado">
+                            Usuário não encontrado
+                        </option>
+
+                        <option value="Aguardando ação externa">
+                            Aguardando ação externa
+                        </option>
+
+                        <option value="Aguardando atividade da equipe elétrica">
+                            Aguardando atividade da equipe elétrica
+                        </option>
+
+                        <option value="Outro">
+                            Outro
+                        </option>
+
+                    </select>
+
+                </div>
+
+                <div
+                    id="pending-description-container"
+                    style="display:none"
+                >
+
+                    <label for="pending-description">
+                        Descreva o motivo
+                    </label>
+
+                    <textarea
+                        id="pending-description"
+                        rows="4"
+                        placeholder="Informe o motivo da pendência..."
+                    ></textarea>
+
+                </div>
+
+                <div class="actions">
+
+                    <button
+                        type="button"
+                        class="secondary"
+                        id="cancel-pending"
+                    >
+                        Cancelar
+                    </button>
+
+                    <button
+                        type="button"
+                        class="primary"
+                        id="confirm-pending"
+                    >
+                        Confirmar
+                    </button>
+
+                </div>
+
+            </div>
+        `;
+
+        document.body.append(
+            modal
+        );
+
+        $('#pending-reason').onchange = e => {
+
+            const container =
+                $('#pending-description-container');
+
+            if(
+                e.target.value === 'Outro'
+            ){
+
+                container.style.display =
+                    'block';
+
+            }else{
+
+                container.style.display =
+                    'none';
+
+                $('#pending-description').value =
+                    '';
+            }
+        };
+
+        $('#cancel-pending').onclick = () => {
+
+            modal.remove();
+
+        };
+
+        $('#confirm-pending').onclick =
+            async () => {
+
+                const reason =
+                    $('#pending-reason').value;
+
+                if(!reason){
+
+                    alert(
+                        'Selecione o motivo da pendência.'
+                    );
+
+                    $('#pending-reason').focus();
+
+                    return;
+                }
+
+                const description =
+                    reason === 'Outro'
+                        ? $('#pending-description')
+                            .value
+                            .trim()
+                        : '';
+
+                if(
+                    reason === 'Outro' &&
+                    !description
+                ){
+
+                    alert(
+                        'Descreva o motivo da pendência.'
+                    );
+
+                    $('#pending-description')
+                        .focus();
+
+                    return;
+                }
+
+                const t =
+                    tickets().find(
+                        x =>
+                            x.id ===
+                            state.selected
+                    );
+
+                if(!t){
+
+                    alert(
+                        'Chamado não encontrado.'
+                    );
+
+                    modal.remove();
+
+                    return;
+                }
+
+                const pending =
+                    criarRegistroPendencia(
+                        reason,
+                        description,
+                        state.user.name
+                    );
+
+                try{
+
+                    await updateDoc(
+                        doc(
+                            db,
+                            'tickets',
+                            t.firestoreId
+                        ),
+                        {
+                            status:
+                                'Pendente',
+
+                            pendingHistory: [
+                                ...(t.pendingHistory || []),
+                                pending
+                            ]
+                        }
+                    );
+
+                    await loadTickets();
+
+                    modal.remove();
+
+                    render();
+
+                }catch(err){
+
+                    console.error(
+                        'Erro ao colocar chamado em Pendente:',
+                        err
+                    );
+
+                    alert(
+                        'Não foi possível colocar o chamado em Pendente. ' +
+                        'Verifique o acesso ao Firestore.'
+                    );
+                }
+            };
+    };
+}
+
 }
 function showSuccess(t){
 
