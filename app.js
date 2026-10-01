@@ -9,6 +9,8 @@ import {
     addDoc,
     updateDoc,
     setDoc,
+    query,
+    where,
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     signInWithPopup,
@@ -17,50 +19,56 @@ import {
 } from './auth.js';
 
 /* API local: a automação futura poderá chamar createTicket(payload) ou adaptar esta função para uma rota HTTP. */
-const users=[
- {id:'u1',email:'solicitante@teste.local',password:'123456',name:'Alexsandro Luna',username:'alexsandro.luna',role:'requester',department:'Financeiro',unit:'Matriz'},
- {id:'t1',email:'tecnico1@teste.local',password:'123456',name:'Rafael Mendes',username:'rafael.mendes',role:'technician'},
- {id:'t2',email:'tecnico2@teste.local',password:'123456',name:'Maria Costa',username:'maria.costa',role:'technician'}
+const users = [
+    { id: 'u1', email: 'solicitante@teste.local', password: '123456', name: 'Alexsandro Luna', username: 'alexsandro.luna', role: 'requester', department: 'Financeiro', unit: 'Matriz' },
+    { id: 't1', email: 'tecnico1@teste.local', password: '123456', name: 'Rafael Mendes', username: 'rafael.mendes', role: 'technician' },
+    { id: 't2', email: 'tecnico2@teste.local', password: '123456', name: 'Maria Costa', username: 'maria.costa', role: 'technician' }
 ];
-const catalog={
- 'Impressora':['Instalação','Impressora não funciona','Sem impressão','Troca de toner','Falta de papel','Mudança de local'],
- 'Desktop e Notebooks':['Computador não liga','Lentidão','Tela/monitor','Teclado ou mouse','Instalação de software','Troca de equipamento'],
- 'Acesso e senha':['Redefinição de senha','Bloqueio de conta','Novo acesso','Alteração de permissão','VPN'],
- 'E-mail e colaboração':['E-mail não envia/recebe','Caixa cheia','Criação de e-mail','Lista de distribuição','Microsoft Teams'],
- 'Rede e internet':['Sem conexão','Internet lenta','Wi‑Fi','Cabo de rede','VPN'],
- 'Sistemas corporativos':['Erro no sistema','Novo acesso','Permissão','Lentidão','Dúvida de uso'],
- 'Telefonia':['Ramal sem funcionar','Criação/alteração de ramal','Chamadas','Headset'],
- 'Solicitações gerais':['Dúvida','Orientação técnica','Visita técnica','Outro']
+const catalog = {
+    'Impressora': ['Instalação', 'Impressora não funciona', 'Sem impressão', 'Troca de toner', 'Falta de papel', 'Mudança de local'],
+    'Desktop e Notebooks': ['Computador não liga', 'Lentidão', 'Tela/monitor', 'Teclado ou mouse', 'Instalação de software', 'Troca de equipamento'],
+    'Acesso e senha': ['Redefinição de senha', 'Bloqueio de conta', 'Novo acesso', 'Alteração de permissão', 'VPN'],
+    'E-mail e colaboração': ['E-mail não envia/recebe', 'Caixa cheia', 'Criação de e-mail', 'Lista de distribuição', 'Microsoft Teams'],
+    'Rede e internet': ['Sem conexão', 'Internet lenta', 'Wi‑Fi', 'Cabo de rede', 'VPN'],
+    'Sistemas corporativos': ['Erro no sistema', 'Novo acesso', 'Permissão', 'Lentidão', 'Dúvida de uso'],
+    'Telefonia': ['Ramal sem funcionar', 'Criação/alteração de ramal', 'Chamadas', 'Headset'],
+    'Solicitações gerais': ['Dúvida', 'Orientação técnica', 'Visita técnica', 'Outro']
 };
-const requisitions=['Instalação','Troca de toner','Mudança de local','Instalação de software','Troca de equipamento','Redefinição de senha','Novo acesso','Alteração de permissão','Criação de e-mail','Lista de distribuição','Criação/alteração de ramal','Orientação técnica','Visita técnica'];
-const slas={Requisição:{Baixa:18,Média:10,Alta:6},Incidente:{Baixa:6,Média:4,Alta:2}};
-const seeded=[
- {id:1001,requester:'ana.souza',service:'Impressora',subcategory:'Impressora não funciona',type:'Incidente',priority:'Alta',sla:2,status:'Aberto',responsible:null,openedAt:'2026-09-02T08:20:00',description:'A impressora do almoxarifado não imprime documentos.'},
- {id:1002,requester:'carlos.lima',service:'Acesso e senha',subcategory:'Novo acesso',type:'Requisição',priority:'Alta',sla:6,status:'Aberto',responsible:null,openedAt:'2026-09-02T09:05:00',description:'Necessário acesso ao sistema corporativo.'},
- {id:1003,requester:'beatriz.rocha',service:'E-mail e colaboração',subcategory:'E-mail não envia/recebe',type:'Incidente',priority:'Média',sla:4,status:'Em análise',responsible:'Maria Costa',openedAt:'2026-09-02T09:22:00',description:'Mensagens permanecem na caixa de saída.'},
- {id:1004,requester:'alexsandro.luna',service:'Desktop e Notebooks',subcategory:'Lentidão',type:'Incidente',priority:'Baixa',sla:6,status:'Concluído',responsible:'Rafael Mendes',openedAt:'2026-09-02T07:00:00',closedAt:'2026-09-02T15:30:00',description:'Notebook está lento para executar as atividades.'},
- {id:1005,requester:'ana.souza',service:'Rede e internet',subcategory:'Sem conexão',type:'Incidente',priority:'Alta',sla:2,status:'Concluído',responsible:'Maria Costa',openedAt:'2026-09-02T10:00:00',closedAt:'2026-09-02T11:20:00',description:'Estação sem acesso à rede.'}
+const requisitions = ['Instalação', 'Troca de toner', 'Mudança de local', 'Instalação de software', 'Troca de equipamento', 'Redefinição de senha', 'Novo acesso', 'Alteração de permissão', 'Criação de e-mail', 'Lista de distribuição', 'Criação/alteração de ramal', 'Orientação técnica', 'Visita técnica'];
+const slas = { Requisição: { Baixa: 18, Média: 10, Alta: 6 }, Incidente: { Baixa: 6, Média: 4, Alta: 2 } };
+const seeded = [
+    { id: 1001, requester: 'ana.souza', service: 'Impressora', subcategory: 'Impressora não funciona', type: 'Incidente', priority: 'Alta', sla: 2, status: 'Aberto', responsible: null, openedAt: '2026-09-02T08:20:00', description: 'A impressora do almoxarifado não imprime documentos.' },
+    { id: 1002, requester: 'carlos.lima', service: 'Acesso e senha', subcategory: 'Novo acesso', type: 'Requisição', priority: 'Alta', sla: 6, status: 'Aberto', responsible: null, openedAt: '2026-09-02T09:05:00', description: 'Necessário acesso ao sistema corporativo.' },
+    { id: 1003, requester: 'beatriz.rocha', service: 'E-mail e colaboração', subcategory: 'E-mail não envia/recebe', type: 'Incidente', priority: 'Média', sla: 4, status: 'Em análise', responsible: 'Maria Costa', openedAt: '2026-09-02T09:22:00', description: 'Mensagens permanecem na caixa de saída.' },
+    { id: 1004, requester: 'alexsandro.luna', service: 'Desktop e Notebooks', subcategory: 'Lentidão', type: 'Incidente', priority: 'Baixa', sla: 6, status: 'Concluído', responsible: 'Rafael Mendes', openedAt: '2026-09-02T07:00:00', closedAt: '2026-09-02T15:30:00', description: 'Notebook está lento para executar as atividades.' },
+    { id: 1005, requester: 'ana.souza', service: 'Rede e internet', subcategory: 'Sem conexão', type: 'Incidente', priority: 'Alta', sla: 2, status: 'Concluído', responsible: 'Maria Costa', openedAt: '2026-09-02T10:00:00', closedAt: '2026-09-02T11:20:00', description: 'Estação sem acesso à rede.' }
 ];
-const directorySeed=[
- {username:'alexsandro.luna',name:'Alexsandro Luna',password:'123456',unit:'Matriz',department:'Financeiro'},
- {username:'ana.souza',name:'Ana Souza',password:'123456',unit:'Matriz',department:'Administrativo'},
- {username:'carlos.lima',name:'Carlos Lima',password:'123456',unit:'Filial São Paulo',department:'Comercial'},
- {username:'beatriz.rocha',name:'Beatriz Rocha',password:'123456',unit:'Matriz',department:'Recursos Humanos'}
+const directorySeed = [
+    { username: 'alexsandro.luna', name: 'Alexsandro Luna', password: '123456', unit: 'Matriz', department: 'Financeiro' },
+    { username: 'ana.souza', name: 'Ana Souza', password: '123456', unit: 'Matriz', department: 'Administrativo' },
+    { username: 'carlos.lima', name: 'Carlos Lima', password: '123456', unit: 'Filial São Paulo', department: 'Comercial' },
+    { username: 'beatriz.rocha', name: 'Beatriz Rocha', password: '123456', unit: 'Matriz', department: 'Recursos Humanos' }
 ];
-let state={
-    user:null,
-    view:'new',
-    selected:null,
-    message:'',
-    tickets:[],
-    users:[],
-    services:[]
+let state = {
+    user: null,
+    view: 'new',
+    selected: null,
+    message: '',
+    tickets: [],
+    users: [],
+    services: [],
+    searchResults: [],
+
+    minePage: 1,
+    minePageSize: 25,
+    queuePage: 1,
+    queuePageSize: 25
 };
-const $=s=>document.querySelector(s); const pad=n=>String(n).padStart(2,'0');
-async function loadTickets(){
+const $ = s => document.querySelector(s); const pad = n => String(n).padStart(2, '0');
+async function loadTickets() {
 
     const snapshot = await getDocs(
-        collection(db,'tickets')
+        collection(db, 'tickets')
     );
 
     state.tickets = snapshot.docs.map(doc => ({
@@ -71,41 +79,101 @@ async function loadTickets(){
     return state.tickets;
 }
 
-function tickets(){
+function tickets() {
 
     return state.tickets;
 }
 
-async function loadUsers(){
+async function loadUsers(
+    mode = 'all'
+) {
 
-    const snapshot = await getDocs(
-        collection(db,'users')
-    );
+    let usersQuery;
 
-    state.users = snapshot.docs.map(userDoc => ({
-        firestoreId: userDoc.id,
-        ...userDoc.data()
-    }));
+    if (
+        mode ===
+        'active-requesters'
+    ) {
+
+        usersQuery =
+            query(
+                collection(
+                    db,
+                    'users'
+                ),
+                where(
+                    'role',
+                    '==',
+                    'requester'
+                ),
+                where(
+                    'active',
+                    '==',
+                    true
+                )
+            );
+
+    } else if (
+        mode ===
+        'all-requesters'
+    ) {
+
+        usersQuery =
+            query(
+                collection(
+                    db,
+                    'users'
+                ),
+                where(
+                    'role',
+                    '==',
+                    'requester'
+                )
+            );
+
+    } else {
+
+        usersQuery =
+            collection(
+                db,
+                'users'
+            );
+    }
+
+    const snapshot =
+        await getDocs(
+            usersQuery
+        );
+
+    state.users =
+        snapshot.docs.map(
+            userDoc => ({
+                firestoreId:
+                    userDoc.id,
+
+                ...userDoc.data()
+            })
+        );
 
     return state.users;
 }
 
-async function loadServices(){
+async function loadServices() {
 
     const snapshot = await getDocs(
-        collection(db,'services')
+        collection(db, 'services')
     );
 
-    if(snapshot.empty){
+    if (snapshot.empty) {
 
-        for(const service of Object.keys(catalog)){
+        for (const service of Object.keys(catalog)) {
 
             await setDoc(
-                doc(db,'services',service),
+                doc(db, 'services', service),
                 {
-                    name:service,
-                    subcategories:catalog[service],
-                    active:true
+                    name: service,
+                    subcategories: catalog[service],
+                    active: true
                 }
             );
 
@@ -116,44 +184,44 @@ async function loadServices(){
 
     state.services = snapshot.docs.map(serviceDoc => {
 
-    const data = serviceDoc.data();
+        const data = serviceDoc.data();
 
-    const subcategoryStatus =
-        data.subcategoryStatus ||
-        Object.fromEntries(
-            (data.subcategories || []).map(
-                subcategory => [
-                    subcategory,
-                    true
-                ]
-            )
-        );
+        const subcategoryStatus =
+            data.subcategoryStatus ||
+            Object.fromEntries(
+                (data.subcategories || []).map(
+                    subcategory => [
+                        subcategory,
+                        true
+                    ]
+                )
+            );
 
-    return {
-        firestoreId: serviceDoc.id,
-        ...data,
-        subcategoryStatus
-    };
-});
+        return {
+            firestoreId: serviceDoc.id,
+            ...data,
+            subcategoryStatus
+        };
+    });
 
-return state.services;
+    return state.services;
 }
 
-function directory(){const stored=localStorage.getItem('itsm-demo-users');if(!stored){localStorage.setItem('itsm-demo-users',JSON.stringify(directorySeed));return [...directorySeed]}const list=JSON.parse(stored),migrated=list.map(u=>({...u,password:u.password||'123456'}));if(JSON.stringify(list)!==JSON.stringify(migrated))localStorage.setItem('itsm-demo-users',JSON.stringify(migrated));return migrated}
-function saveDirectory(list){localStorage.setItem('itsm-demo-users',JSON.stringify(list))}
-function formatDate(v){const d=new Date(v);return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${String(d.getFullYear()).slice(2)} ${pad(d.getHours())}:${pad(d.getMinutes())}`}
+function directory() { const stored = localStorage.getItem('itsm-demo-users'); if (!stored) { localStorage.setItem('itsm-demo-users', JSON.stringify(directorySeed)); return [...directorySeed] } const list = JSON.parse(stored), migrated = list.map(u => ({ ...u, password: u.password || '123456' })); if (JSON.stringify(list) !== JSON.stringify(migrated)) localStorage.setItem('itsm-demo-users', JSON.stringify(migrated)); return migrated }
+function saveDirectory(list) { localStorage.setItem('itsm-demo-users', JSON.stringify(list)) }
+function formatDate(v) { const d = new Date(v); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)} ${pad(d.getHours())}:${pad(d.getMinutes())}` }
 
-function ajustarInicioSLA(data){
+function ajustarInicioSLA(data) {
 
     const d = new Date(data);
 
-    while(true){
+    while (true) {
 
         const dia =
             d.getDay();
 
         // Sábado ou domingo
-        if(dia === 0 || dia === 6){
+        if (dia === 0 || dia === 6) {
 
             d.setDate(
                 d.getDate() +
@@ -171,7 +239,7 @@ function ajustarInicioSLA(data){
         }
 
         // Antes das 08:00
-        if(d.getHours() < 8){
+        if (d.getHours() < 8) {
 
             d.setHours(
                 8,
@@ -184,7 +252,7 @@ function ajustarInicioSLA(data){
         }
 
         // Às 18:00 ou depois
-        if(
+        if (
             d.getHours() > 18 ||
             (
                 d.getHours() === 18 &&
@@ -194,7 +262,7 @@ function ajustarInicioSLA(data){
                     d.getMilliseconds() > 0
                 )
             )
-        ){
+        ) {
 
             d.setDate(
                 d.getDate() + 1
@@ -218,7 +286,7 @@ function ajustarInicioSLA(data){
 function adicionarHorasUteis(
     inicio,
     horas
-){
+) {
 
     let d =
         ajustarInicioSLA(
@@ -228,16 +296,16 @@ function adicionarHorasUteis(
     let restantes =
         Number(horas);
 
-    while(restantes > 0){
+    while (restantes > 0) {
 
         const dia =
             d.getDay();
 
         // Fim de semana
-        if(
+        if (
             dia === 0 ||
             dia === 6
-        ){
+        ) {
 
             d =
                 ajustarInicioSLA(
@@ -266,10 +334,10 @@ function adicionarHorasUteis(
                 60 * 60 * 1000
             );
 
-        if(
+        if (
             restantes <=
             horasDisponiveis
-        ){
+        ) {
 
             d.setTime(
                 d.getTime() +
@@ -281,7 +349,7 @@ function adicionarHorasUteis(
 
             restantes = 0;
 
-        }else{
+        } else {
 
             restantes -=
                 horasDisponiveis;
@@ -308,15 +376,15 @@ function adicionarHorasUteis(
 }
 
 
-function deadline(t){
+function deadline(t) {
 
-    if(
+    if (
         !t ||
         !Number.isFinite(
             Number(t.sla)
         ) ||
         Number(t.sla) <= 0
-    ){
+    ) {
 
         return null;
     }
@@ -327,13 +395,13 @@ function deadline(t){
      * O SLA continua a partir do momento da retomada,
      * utilizando apenas o tempo restante calculado antes.
      */
-    if(
+    if (
         Number.isFinite(
             Number(t.slaRemainingMinutes)
         ) &&
         Number(t.slaRemainingMinutes) > 0 &&
         t.slaResumeAt
-    ){
+    ) {
 
         return adicionarHorasUteis(
             t.slaResumeAt,
@@ -346,7 +414,7 @@ function deadline(t){
      * por uma pendência continuam utilizando
      * o cálculo original.
      */
-    if(!t.openedAt){
+    if (!t.openedAt) {
 
         return null;
     }
@@ -360,7 +428,7 @@ function deadline(t){
 function horasUteisEntre(
     inicio,
     fim
-){
+) {
 
     const inicioDate =
         new Date(inicio);
@@ -368,7 +436,7 @@ function horasUteisEntre(
     const fimDate =
         new Date(fim);
 
-    if(
+    if (
         Number.isNaN(
             inicioDate.getTime()
         ) ||
@@ -376,7 +444,7 @@ function horasUteisEntre(
             fimDate.getTime()
         ) ||
         fimDate <= inicioDate
-    ){
+    ) {
 
         return 0;
     }
@@ -393,18 +461,18 @@ function horasUteisEntre(
         0
     );
 
-    while(
+    while (
         diaAtual <= fimDate
-    ){
+    ) {
 
         const dia =
             diaAtual.getDay();
 
         // Sábado e domingo não contam
-        if(
+        if (
             dia !== 0 &&
             dia !== 6
-        ){
+        ) {
 
             const inicioExpediente =
                 new Date(diaAtual);
@@ -436,10 +504,10 @@ function horasUteisEntre(
                     ? fimDate
                     : fimExpediente;
 
-            if(
+            if (
                 fimContagem >
                 inicioContagem
-            ){
+            ) {
 
                 totalHoras +=
                     (
@@ -464,7 +532,7 @@ function criarRegistroPendencia(
     reason,
     description,
     responsible
-){
+) {
 
     return {
 
@@ -489,15 +557,15 @@ function criarRegistroPendencia(
     };
 }
 
-function slaResult(t){
+function slaResult(t) {
 
     const limit =
         deadline(t);
 
-    if(
+    if (
         !t.closedAt ||
         !limit
-    ){
+    ) {
 
         return null;
     }
@@ -507,7 +575,7 @@ function slaResult(t){
         : 'Em atraso';
 }
 
-function formatarTempoSLA(horas){
+function formatarTempoSLA(horas) {
 
     const minutos =
         Math.max(
@@ -531,12 +599,12 @@ function formatarTempoSLA(horas){
     `;
 }
 
-function slaInfo(t){
+function slaInfo(t) {
 
     const result =
         slaResult(t);
 
-    if(result){
+    if (result) {
 
         return `
             <strong class="${result === 'Dentro da SLA'
@@ -562,10 +630,10 @@ function slaInfo(t){
      * Chamado atualmente pendente
      */
 
-    if(
+    if (
         t.status === 'Pendente' &&
         Array.isArray(t.pendingHistory)
-    ){
+    ) {
 
         const pendenciaAtual =
             [...t.pendingHistory]
@@ -575,12 +643,12 @@ function slaInfo(t){
                         !item.endedAt
                 );
 
-        if(pendenciaAtual){
+        if (pendenciaAtual) {
 
             const limit =
                 deadline(t);
 
-            if(limit){
+            if (limit) {
 
                 const horasRestantes =
                     horasUteisEntre(
@@ -598,8 +666,8 @@ function slaInfo(t){
                     <span class="muted">
                         Desde:
                         ${formatDate(
-                            pendenciaAtual.startedAt
-                        )}
+                    pendenciaAtual.startedAt
+                )}
                     </span>
 
                     <br>
@@ -607,8 +675,8 @@ function slaInfo(t){
                     <span class="muted">
                         Restante:
                         ${formatarTempoSLA(
-                            horasRestantes
-                        )}
+                    horasRestantes
+                )}
                     </span>
                 `;
             }
@@ -618,7 +686,7 @@ function slaInfo(t){
     const limit =
         deadline(t);
 
-    if(!limit){
+    if (!limit) {
 
         return `
             <span class="muted">
@@ -634,20 +702,20 @@ function slaInfo(t){
         </span>
     `;
 }
-function typeFor(sub){return requisitions.includes(sub)?'Requisição':'Incidente'}
-function badge(status){
+function typeFor(sub) { return requisitions.includes(sub) ? 'Requisição' : 'Incidente' }
+function badge(status) {
 
     let classe = 'done';
 
-    if(status === 'Aberto'){
+    if (status === 'Aberto') {
 
         classe = 'open';
 
-    }else if(status === 'Em análise'){
+    } else if (status === 'Em análise') {
 
         classe = 'analysis';
 
-    }else if(status === 'Pendente'){
+    } else if (status === 'Pendente') {
 
         classe = 'pending';
     }
@@ -658,7 +726,7 @@ function badge(status){
         </span>
     `;
 }
-function login(){
+function login() {
     return `
         <main class="login">
             <section class="login-card">
@@ -750,7 +818,7 @@ function login(){
     `;
 }
 
-function cadastro(){
+function cadastro() {
     return `
         <main class="login">
             <section class="login-card">
@@ -843,16 +911,16 @@ function cadastro(){
         </main>
     `;
 }
-function shell(content){
+function shell(content) {
 
     const tech = state.user.role === 'technician';
     const admin = state.user.role === 'admin';
 
     let navigation = '';
 
-    if(admin){
+    if (admin) {
 
-    navigation = `
+        navigation = `
         <button
             class="nav ${state.view === 'admin' ? 'active' : ''}"
             data-view="admin"
@@ -866,20 +934,48 @@ function shell(content){
         >
             Fila de chamados
         </button>
+
+        <button
+    class="nav ${state.view === 'new-on-behalf' ? 'active' : ''}"
+    data-view="new-on-behalf"
+>
+    Abrir em nome de solicitante
+</button>
+
+<button
+    class="nav ${state.view === 'search-tickets' ? 'active' : ''}"
+    data-view="search-tickets"
+>
+    Pesquisar chamados
+</button>
     `;
 
-}else if(tech){
+    } else if (tech) {
 
         navigation = `
-            <button
-                class="nav ${state.view === 'queue' ? 'active' : ''}"
-                data-view="queue"
-            >
-                Fila de chamados
-            </button>
-        `;
+        <button
+            class="nav ${state.view === 'queue' ? 'active' : ''}"
+            data-view="queue"
+        >
+            Fila de chamados
+        </button>
 
-    }else{
+        <button
+            class="nav ${state.view === 'new-on-behalf' ? 'active' : ''}"
+            data-view="new-on-behalf"
+        >
+            Abrir em nome de solicitante
+        </button>
+
+        <button
+    class="nav ${state.view === 'search-tickets' ? 'active' : ''}"
+    data-view="search-tickets"
+>
+    Pesquisar chamados
+</button>
+    `;
+
+    } else {
 
         navigation = `
             <button
@@ -949,11 +1045,11 @@ function shell(content){
         </div>
     `;
 }
-function newTicket(){
+function newTicket() {
 
     const services = state.services
         .filter(service => service.active !== false)
-        .sort((a,b) =>
+        .sort((a, b) =>
             (a.name || '').localeCompare(
                 b.name || '',
                 'pt-BR'
@@ -965,7 +1061,7 @@ function newTicket(){
             </option>
         `)
         .join('');
-        return shell(`<div class="page-head"><div><h2>Abrir novo chamado</h2><p>Informe os dados para registrar sua solicitação.</p></div></div><section class="card"><form id="ticket-form"><div class="form-grid"><div><label>Nome do solicitante</label><input readonly value="${state.user.name}"></div><div><label>Unidade / Departamento</label><input readonly value="${state.user.unit} / ${state.user.department}"></div><div><label>Serviço</label><select id="service" required><option value="">Selecione um serviço</option>${services}</select></div><div><label>Subcategoria</label><select id="subcategory" required disabled><option>Escolha primeiro um serviço</option></select></div><div><label>Tipo de chamado</label><input id="type" readonly value="Será definido automaticamente"><p class="readonly-note">Classificação automática.</p></div><div><label>SLA de resolução</label><input id="sla" readonly value="Selecione prioridade e subcategoria"><p class="readonly-note">Prazo calculado automaticamente.</p></div>
+    return shell(`<div class="page-head"><div><h2>Abrir novo chamado</h2><p>Informe os dados para registrar sua solicitação.</p></div></div><section class="card"><form id="ticket-form"><div class="form-grid"><div><label>Nome do solicitante</label><input readonly value="${state.user.name}"></div><div><label>Unidade / Departamento</label><input readonly value="${state.user.unit} / ${state.user.department}"></div><div><label>Serviço</label><select id="service" required><option value="">Selecione um serviço</option>${services}</select></div><div><label>Subcategoria</label><select id="subcategory" required disabled><option>Escolha primeiro um serviço</option></select></div><div><label>Tipo de chamado</label><input id="type" readonly value="Será definido automaticamente"><p class="readonly-note">Classificação automática.</p></div><div><label>SLA de resolução</label><input id="sla" readonly value="Selecione prioridade e subcategoria"><p class="readonly-note">Prazo calculado automaticamente.</p></div>
             
             <div>
     <label>Criticidade</label>
@@ -979,8 +1075,508 @@ function newTicket(){
     </p>
 </div>
             
-            <div class="full"><label>Descrição</label><textarea id="description" required placeholder="Descreva o motivo do chamado com suas palavras."></textarea></div></div><div class="actions"><button type="reset" class="secondary">Limpar</button><button class="primary">Criar chamado</button></div></form></section>`)}
-function mine(){const list=tickets().filter(t=>t.requester===state.user.username).sort((a,b)=>new Date(b.openedAt)-new Date(a.openedAt));return shell(`<div class="page-head"><div><h2>Meus chamados</h2><p>Acompanhe os tickets registrados em seu nome.</p></div><button class="primary" data-view="new">+ Abrir novo chamado</button></div><section class="card">${list.length?table(list,false):'<div class="empty">Você ainda não possui chamados cadastrados.</div>'}</section>`)}
+            <div class="full"><label>Descrição</label><textarea id="description" required placeholder="Descreva o motivo do chamado com suas palavras."></textarea></div></div><div class="actions"><button type="reset" class="secondary">Limpar</button><button class="primary">Criar chamado</button></div></form></section>`)
+}
+
+function newTicketOnBehalf() {
+
+    const services =
+        state.services
+            .filter(
+                service =>
+                    service.active !== false
+            )
+            .sort(
+                (a, b) =>
+                    (a.name || '').localeCompare(
+                        b.name || '',
+                        'pt-BR'
+                    )
+            )
+            .map(
+                service => `
+                    <option
+                        value="${service.name}"
+                    >
+                        ${service.name}
+                    </option>
+                `
+            )
+            .join('');
+
+    return shell(`
+        <div class="page-head">
+
+            <div>
+
+                <h2>
+                    Abrir chamado em nome de outro solicitante
+                </h2>
+
+                <p>
+                    Registre um chamado recebido por telefone,
+                    atendimento presencial ou outro canal.
+                </p>
+
+            </div>
+
+        </div>
+
+        <section class="card">
+
+            <div
+                class="message"
+                style="margin-bottom:20px"
+            >
+
+                <strong>
+                    Aberto por:
+                </strong>
+
+                ${state.user.name}
+
+                <br>
+
+                <strong>
+                    Perfil:
+                </strong>
+
+                ${state.user.role === 'admin'
+            ? 'Administrador'
+            : 'Técnico'
+        }
+
+            </div>
+
+            <form id="ticket-on-behalf-form">
+
+                <div class="form-grid">
+
+                    <div class="full">
+
+                        <label>
+                            Em nome de
+                        </label>
+
+                        <input
+                            type="text"
+                            id="on-behalf-requester-search"
+                            autocomplete="off"
+                            placeholder="Digite o nome do solicitante"
+                        >
+
+                        <input
+                            type="hidden"
+                            id="on-behalf-requester"
+                        >
+
+                        <div
+                            id="on-behalf-requester-results"
+                            style="
+                                margin-top:6px;
+                                display:none;
+                                border:1px solid #d7e0eb;
+                                border-radius:8px;
+                                background:#fff;
+                                max-height:220px;
+                                overflow-y:auto;
+                            "
+                        ></div>
+
+                        <div
+                            id="on-behalf-requester-selected"
+                            style="
+                                margin-top:8px;
+                                display:none;
+                                padding:10px 12px;
+                                border-radius:8px;
+                                background:#eef6ff;
+                            "
+                        ></div>
+
+                    </div>
+
+                    <div>
+
+                        <label>
+                            Serviço
+                        </label>
+
+                        <select
+                            id="on-behalf-service"
+                            required
+                        >
+
+                            <option value="">
+                                Selecione um serviço
+                            </option>
+
+                            ${services}
+
+                        </select>
+
+                    </div>
+
+                    <div>
+
+                        <label>
+                            Subcategoria
+                        </label>
+
+                        <select
+                            id="on-behalf-subcategory"
+                            required
+                            disabled
+                        >
+
+                            <option value="">
+                                Escolha primeiro um serviço
+                            </option>
+
+                        </select>
+
+                    </div>
+
+                    <div>
+
+                        <label>
+                            Tipo de chamado
+                        </label>
+
+                        <input
+                            id="on-behalf-type"
+                            readonly
+                            value="Será definido automaticamente"
+                        >
+
+                    </div>
+
+                    <div>
+
+                        <label>
+                            Criticidade
+                        </label>
+
+                        <input
+                            id="on-behalf-criticality"
+                            readonly
+                            value="Será definida automaticamente"
+                        >
+
+                    </div>
+
+                    <div>
+
+                        <label>
+                            SLA de resolução
+                        </label>
+
+                        <input
+                            id="on-behalf-sla"
+                            readonly
+                            value="Será definido automaticamente"
+                        >
+
+                    </div>
+
+                    <div class="full">
+
+                        <label>
+                            Descrição
+                        </label>
+
+                        <textarea
+                            id="on-behalf-description"
+                            required
+                            placeholder="Descreva o motivo do chamado."
+                        ></textarea>
+
+                    </div>
+
+                </div>
+
+                <div class="actions">
+
+                    <button
+                        type="button"
+                        class="secondary"
+                        data-view="queue"
+                    >
+                        Cancelar
+                    </button>
+
+                    <button
+                        type="submit"
+                        class="primary"
+                        disabled
+                    >
+                        Criar chamado
+                    </button>
+
+                </div>
+
+            </form>
+
+        </section>
+    `);
+}
+
+
+function mine() {
+
+    const meusChamados =
+        tickets()
+            .filter(
+                t =>
+                    t.requester ===
+                    state.user.username
+            )
+            .sort(
+                (a, b) =>
+                    new Date(b.openedAt) -
+                    new Date(a.openedAt)
+            );
+
+    const filtro =
+        state.mineStatus ||
+        'Todos';
+
+    const listaFiltrada =
+        filtro === 'Todos'
+            ? meusChamados
+            : filtro === 'Resolvidos'
+                ? meusChamados.filter(
+                    t =>
+                        t.status ===
+                        'Concluído'
+                )
+                : meusChamados.filter(
+                    t =>
+                        t.status !==
+                        'Concluído'
+                );
+
+                    const totalChamados =
+        listaFiltrada.length;
+
+    const totalPaginas =
+        Math.max(
+            1,
+            Math.ceil(
+                totalChamados /
+                state.minePageSize
+            )
+        );
+
+    if (
+        state.minePage >
+        totalPaginas
+    ) {
+        state.minePage =
+            totalPaginas;
+    }
+
+    const inicio =
+        (state.minePage - 1) *
+        state.minePageSize;
+
+    const fim =
+        Math.min(
+            inicio +
+            state.minePageSize,
+            totalChamados
+        );
+
+    const chamadosPagina =
+        listaFiltrada.slice(
+            inicio,
+            fim
+        );
+
+    return shell(`
+
+        <div class="page-head">
+
+            <div>
+
+                <h2>
+                    Meus chamados
+                </h2>
+
+                <p>
+                    Acompanhe os tickets registrados
+                    em seu nome.
+                </p>
+
+            </div>
+
+            <button
+                class="primary"
+                data-view="new"
+            >
+                + Abrir novo chamado
+            </button>
+
+        </div>
+
+        <section class="card">
+
+            <div
+                style="
+                    display:flex;
+                    align-items:center;
+                    gap:12px;
+                    margin-bottom:20px;
+                    flex-wrap:wrap;
+                "
+            >
+
+                <label
+                    for="mine-status"
+                    style="margin:0"
+                >
+                    Status:
+                </label>
+
+                <select
+                    id="mine-status"
+                    style="max-width:280px"
+                >
+
+                    <option
+                        value="Todos"
+                        ${filtro === 'Todos'
+            ? 'selected'
+            : ''
+        }
+                    >
+                        Todos
+                    </option>
+
+                    <option
+                        value="Em andamento"
+                        ${filtro === 'Em andamento'
+            ? 'selected'
+            : ''
+        }
+                    >
+                        Em andamento
+                    </option>
+
+                    <option
+                        value="Resolvidos"
+                        ${filtro === 'Resolvidos'
+            ? 'selected'
+            : ''
+        }
+                    >
+                        Resolvidos
+                    </option>
+
+                </select>
+
+            </div>
+
+            ${totalChamados
+    ? `
+        ${table(
+            chamadosPagina,
+            false
+        )}
+
+        <div
+            style="
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:12px;
+                flex-wrap:wrap;
+                margin-top:18px;
+            "
+        >
+
+            <span class="muted">
+                Exibindo
+                ${totalChamados ? inicio + 1 : 0}
+                a
+                ${fim}
+                de
+                ${totalChamados}
+                chamados
+            </span>
+
+            <div
+                style="
+                    display:flex;
+                    align-items:center;
+                    gap:8px;
+                    flex-wrap:wrap;
+                "
+            >
+
+                <label
+                    for="mine-page-size"
+                    style="margin:0"
+                >
+                    Por página:
+                </label>
+
+                <select
+                    id="mine-page-size"
+                    style="width:auto"
+                >
+                    <option value="25"
+                        ${state.minePageSize === 25 ? 'selected' : ''}>
+                        25
+                    </option>
+
+                    <option value="50"
+                        ${state.minePageSize === 50 ? 'selected' : ''}>
+                        50
+                    </option>
+
+                    <option value="100"
+                        ${state.minePageSize === 100 ? 'selected' : ''}>
+                        100
+                    </option>
+                </select>
+
+                <button
+                    type="button"
+                    id="mine-prev"
+                    ${state.minePage <= 1 ? 'disabled' : ''}
+                >
+                    Anterior
+                </button>
+
+                <span>
+                    Página ${state.minePage} de ${totalPaginas}
+                </span>
+
+                <button
+                    type="button"
+                    id="mine-next"
+                    ${state.minePage >= totalPaginas ? 'disabled' : ''}
+                >
+                    Próxima
+                </button>
+
+            </div>
+
+        </div>
+    `
+    : `
+        <div class="empty">
+            Nenhum chamado encontrado
+            para o filtro selecionado.
+        </div>
+    `
+}
+
+        </section>
+
+    `);
+}
 
 function table(list, tech) {
     return `
@@ -990,71 +1586,76 @@ function table(list, tech) {
                     <tr>
                         <th>Ticket</th>
                         <th>Solicitante</th>
+                        <th>Aberto por</th>
                         <th>Serviço</th>
+                        <th>Tipo</th>
                         <th>Aberto em</th>
                         <th>Status</th>
 
-                        ${
-                            tech
-                                ? `
+                        ${tech
+            ? `
                                     <th>SLA</th>
                                     <th>Responsável</th>
                                     <th>Ação</th>
                                 `
-                                : ''
-                        }
+            : ''
+        }
                     </tr>
                 </thead>
 
                 <tbody>
-                    ${
-                        list
-                            .map(
-                                t => `
+                    ${list
+            .map(
+                t => `
                                     <tr>
                                         <td>
                                             <button
                                                 class="ticket-link"
                                                 data-ticket="${t.id}"
                                             >
-                                                #2026-${t.id}
+                                               ${numeroChamado(t)}
                                             </button>
                                         </td>
 
                                         <td>
-                                            ${t.requester}
-                                        </td>
+    ${t.requesterName || t.requester}
+</td>
 
-                                        <td>
-                                            ${t.service}
-                                        </td>
+<td>
+    ${t.openedBy || '<span class="muted">Não informado</span>'}
+</td>
 
-                                        <td>
-                                            ${formatDate(t.openedAt)}
-                                        </td>
+<td>
+    ${t.service}
+</td>
+
+<td>
+    ${t.type || '<span class="muted">Não informado</span>'}
+</td>
+
+<td>
+    ${formatDate(t.openedAt)}
+</td>
 
                                         <td>
                                             ${badge(t.status)}
                                         </td>
 
-                                        ${
-                                            tech
-                                                ? `
+                                        ${tech
+                        ? `
                                                     <td>
                                                         ${slaInfo(t)}
                                                     </td>
 
                                                     <td>
-                                                        ${
-                                                            t.responsible ||
-                                                            '<span class="muted">Não atribuído</span>'
-                                                        }
+                                                        ${t.responsible ||
+                        '<span class="muted">Não atribuído</span>'
+                        }
                                                     </td>
 
                                                     <td>
-    ${
-        !t.responsible
-            ? `
+    ${!t.responsible
+                            ? `
                 <button
                     class="primary capture"
                     data-capture="${t.id}"
@@ -1062,9 +1663,9 @@ function table(list, tech) {
                     Capturar
                 </button>
             `
-            : t.responsible !== state.user.name &&
-t.status !== 'Concluído'
-    ? `
+                            : t.responsible !== state.user.name &&
+                                t.status !== 'Concluído'
+                                ? `
         <button
             class="primary assume"
             data-assume="${t.id}"
@@ -1072,7 +1673,7 @@ t.status !== 'Concluído'
             Assumir atendimento
         </button>
     `
-                : `
+                                : `
                     <button
                         class="secondary"
                         data-ticket="${t.id}"
@@ -1080,25 +1681,515 @@ t.status !== 'Concluído'
                         Visualizar
                     </button>
                 `
-    }
+                        }
 </td>
                                                 `
-                                                : ''
-                                        }
+                        : ''
+                    }
                                     </tr>
                                 `
-                            )
-                            .join('')
-                    }
+            )
+            .join('')
+        }
                 </tbody>
             </table>
         </div>
     `;
 }
-function queue(){const list=tickets().sort((a,b)=>new Date(b.openedAt)-new Date(a.openedAt));return shell(`<div class="page-head"><div><h2>Fila de chamados</h2><p>Chamados em ordem de abertura. Capture um ticket para assumir o atendimento.</p></div></div><section class="card">${table(list,true)}</section>`)}
-function usersPage(){const list=directory();return shell(`<div class="page-head"><div><h2>Cadastro de usuários</h2><p>Base local que simula a futura consulta ao Active Directory.</p></div></div><section class="card"><h3 style="margin-top:0">Adicionar usuário</h3><form id="user-form"><div class="form-grid"><div><label>Usuário (AD)</label><input id="new-username" required placeholder="nome.sobrenome"></div><div><label>Senha de acesso</label><input id="new-password" type="password" required placeholder="Defina uma senha"></div><div><label>Nome completo</label><input id="new-name" required placeholder="Nome do colaborador"></div><div><label>Unidade</label><input id="new-unit" required placeholder="Ex.: Matriz"></div><div class="full"><label>Departamento</label><input id="new-department" required placeholder="Ex.: Financeiro"></div></div><div class="actions"><button class="primary">Cadastrar usuário</button></div></form></section><section class="card" style="margin-top:24px"><h3 style="margin-top:0">Usuários cadastrados</h3><div class="table-wrap"><table class="tickets"><thead><tr><th>Usuário</th><th>Nome</th><th>Unidade</th><th>Departamento</th><th>Acesso</th></tr></thead><tbody>${list.map(u=>`<tr><td><strong>${u.username}</strong></td><td>${u.name}</td><td>${u.unit}</td><td>${u.department}</td><td><span class="badge done">Ativo</span></td></tr>`).join('')}</tbody></table></div></section>`)}
 
-function adminPage(){
+function searchTickets() {
+
+    return shell(`
+
+        <div class="page-head">
+
+            <div>
+
+                <h2>
+                    Pesquisar chamados
+                </h2>
+
+                <p>
+                    Consulte chamados atuais e históricos.
+                </p>
+
+            </div>
+
+        </div>
+
+        <section class="card">
+
+            <div class="form-grid">
+
+                <div>
+    <label>
+        Número do chamado
+    </label>
+
+    <input
+        id="search-ticket-number"
+        type="text"
+        placeholder="Ex.: 2026-1047"
+    >
+</div>
+
+<div>
+    <label>
+        Solicitante
+    </label>
+
+    <input
+        id="search-requester"
+        type="text"
+        autocomplete="off"
+        placeholder="Nome, usuário ou e-mail"
+    >
+
+    <input
+        type="hidden"
+        id="search-requester-id"
+    >
+
+    <div
+        id="search-requester-results"
+        style="
+            margin-top:6px;
+            display:none;
+            border:1px solid #d7e0eb;
+            border-radius:8px;
+            background:#fff;
+            max-height:220px;
+            overflow-y:auto;
+        "
+    ></div>
+</div>
+
+                <div>
+                    <label>
+                        Técnico responsável
+                    </label>
+
+                    <select
+    id="search-responsible"
+>
+    <option value="">
+        Todos
+    </option>
+
+    ${
+        state.users
+            .filter(
+                user =>
+                    user.role === 'technician' &&
+                    user.active !== false
+            )
+            .sort(
+                (a, b) =>
+                    (a.name || '')
+                        .localeCompare(
+                            b.name || '',
+                            'pt-BR'
+                        )
+            )
+            .map(
+                user => `
+                    <option
+                        value="${user.name}"
+                    >
+                        ${user.name}
+                    </option>
+                `
+            )
+            .join('')
+    }
+
+</select>
+                </div>
+
+                <div>
+                    <label>
+                        Serviço
+                    </label>
+
+                    <select
+                        id="search-service"
+                    >
+                        <option value="">
+                            Todos
+                        </option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>
+                        Status
+                    </label>
+
+                    <select
+                        id="search-status"
+                    >
+                        <option value="">
+                            Todos
+                        </option>
+
+                        <option value="Aberto">
+                            Aberto
+                        </option>
+
+                        <option value="Em análise">
+                            Em análise
+                        </option>
+
+                        <option value="Pendente">
+                            Pendente
+                        </option>
+
+                        <option value="Concluído">
+                            Concluído
+                        </option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>
+                        Tipo
+                    </label>
+
+                    <select
+                        id="search-type"
+                    >
+                        <option value="">
+                            Todos
+                        </option>
+
+                        <option value="Incidente">
+                            Incidente
+                        </option>
+
+                        <option value="Requisição">
+                            Requisição
+                        </option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>
+                        Data inicial
+                    </label>
+
+                    <input
+                        id="search-date-start"
+                        type="date"
+                    >
+                </div>
+
+                <div>
+                    <label>
+                        Data final
+                    </label>
+
+                    <input
+                        id="search-date-end"
+                        type="date"
+                    >
+                </div>
+
+            </div>
+
+            <div class="actions">
+
+                <button
+                    type="button"
+                    class="secondary"
+                    id="clear-ticket-search"
+                >
+                    Limpar
+                </button>
+
+                <button
+                    type="button"
+                    class="primary"
+                    id="execute-ticket-search"
+                >
+                    Pesquisar chamados
+                </button>
+
+            </div>
+
+        </section>
+
+        <section
+            class="card"
+            style="margin-top:20px"
+        >
+
+            <div
+    class="empty"
+    id="search-results"
+>
+    Utilize os filtros acima para pesquisar chamados.
+</div>
+
+        </section>
+
+    `);
+}
+
+function queue() {
+
+    const responsaveis =
+        [
+            ...new Set(
+                tickets()
+                    .map(
+                        ticket =>
+                            ticket.responsible
+                    )
+                    .filter(Boolean)
+            )
+        ]
+            .sort(
+                (a, b) =>
+                    a.localeCompare(
+                        b,
+                        'pt-BR'
+                    )
+            );
+
+    const filtro =
+        state.queueResponsible ||
+        'Todos';
+
+    const listaFiltrada =
+        filtro === 'Todos'
+            ? tickets()
+            : tickets().filter(
+                ticket =>
+                    ticket.responsible ===
+                    filtro
+            );
+
+    const list =
+        listaFiltrada.sort(
+            (a, b) =>
+                new Date(b.openedAt) -
+                new Date(a.openedAt)
+        );
+
+            const totalChamados =
+        list.length;
+
+    const totalPaginas =
+        Math.max(
+            1,
+            Math.ceil(
+                totalChamados /
+                state.queuePageSize
+            )
+        );
+
+    if (
+        state.queuePage >
+        totalPaginas
+    ) {
+        state.queuePage =
+            totalPaginas;
+    }
+
+    const inicio =
+        (state.queuePage - 1) *
+        state.queuePageSize;
+
+    const fim =
+        Math.min(
+            inicio +
+            state.queuePageSize,
+            totalChamados
+        );
+
+    const chamadosPagina =
+        list.slice(
+            inicio,
+            fim
+        );
+
+    return shell(`
+
+        <div class="page-head">
+
+            <div>
+
+                <h2>
+                    Fila de chamados
+                </h2>
+
+                <p>
+                    Chamados em ordem de abertura.
+                    Capture um ticket para assumir o atendimento.
+                </p>
+
+            </div>
+
+        </div>
+
+        <section class="card">
+
+            <div
+                style="
+                    display:flex;
+                    align-items:center;
+                    gap:12px;
+                    margin-bottom:20px;
+                    flex-wrap:wrap;
+                "
+            >
+
+                <label
+                    for="queue-responsible"
+                    style="margin:0"
+                >
+                    Responsável:
+                </label>
+
+                <select
+                    id="queue-responsible"
+                    style="max-width:280px"
+                >
+
+                    <option
+                        value="Todos"
+                        ${filtro === 'Todos'
+            ? 'selected'
+            : ''
+        }
+                    >
+                        Todos
+                    </option>
+
+                    ${responsaveis
+            .map(
+                responsavel => `
+                                    <option
+                                        value="${responsavel}"
+                                        ${filtro === responsavel
+                        ? 'selected'
+                        : ''
+                    }
+                                    >
+                                        ${responsavel}
+                                    </option>
+                                `
+            )
+            .join('')
+        }
+
+                </select>
+
+            </div>
+
+           ${totalChamados
+    ? `
+        ${table(
+            chamadosPagina,
+            true
+        )}
+
+        <div
+            style="
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:12px;
+                flex-wrap:wrap;
+                margin-top:18px;
+            "
+        >
+
+            <span class="muted">
+                Exibindo
+                ${inicio + 1}
+                a
+                ${fim}
+                de
+                ${totalChamados}
+                chamados
+            </span>
+
+            <div
+                style="
+                    display:flex;
+                    align-items:center;
+                    gap:8px;
+                    flex-wrap:wrap;
+                "
+            >
+
+                <label
+                    for="queue-page-size"
+                    style="margin:0"
+                >
+                    Por página:
+                </label>
+
+                <select
+                    id="queue-page-size"
+                    style="width:auto"
+                >
+                    <option value="25"
+                        ${state.queuePageSize === 25 ? 'selected' : ''}>
+                        25
+                    </option>
+
+                    <option value="50"
+                        ${state.queuePageSize === 50 ? 'selected' : ''}>
+                        50
+                    </option>
+
+                    <option value="100"
+                        ${state.queuePageSize === 100 ? 'selected' : ''}>
+                        100
+                    </option>
+                </select>
+
+                <button
+                    type="button"
+                    id="queue-prev"
+                    ${state.queuePage <= 1 ? 'disabled' : ''}
+                >
+                    Anterior
+                </button>
+
+                <span>
+                    Página ${state.queuePage} de ${totalPaginas}
+                </span>
+
+                <button
+                    type="button"
+                    id="queue-next"
+                    ${state.queuePage >= totalPaginas ? 'disabled' : ''}
+                >
+                    Próxima
+                </button>
+
+            </div>
+
+        </div>
+    `
+    : `
+        <div class="empty">
+            Nenhum chamado encontrado
+            para o responsável selecionado.
+        </div>
+    `
+}
+
+        </section>
+
+    `);
+}
+function usersPage() { const list = directory(); return shell(`<div class="page-head"><div><h2>Cadastro de usuários</h2><p>Base local que simula a futura consulta ao Active Directory.</p></div></div><section class="card"><h3 style="margin-top:0">Adicionar usuário</h3><form id="user-form"><div class="form-grid"><div><label>Usuário (AD)</label><input id="new-username" required placeholder="nome.sobrenome"></div><div><label>Senha de acesso</label><input id="new-password" type="password" required placeholder="Defina uma senha"></div><div><label>Nome completo</label><input id="new-name" required placeholder="Nome do colaborador"></div><div><label>Unidade</label><input id="new-unit" required placeholder="Ex.: Matriz"></div><div class="full"><label>Departamento</label><input id="new-department" required placeholder="Ex.: Financeiro"></div></div><div class="actions"><button class="primary">Cadastrar usuário</button></div></form></section><section class="card" style="margin-top:24px"><h3 style="margin-top:0">Usuários cadastrados</h3><div class="table-wrap"><table class="tickets"><thead><tr><th>Usuário</th><th>Nome</th><th>Unidade</th><th>Departamento</th><th>Acesso</th></tr></thead><tbody>${list.map(u => `<tr><td><strong>${u.username}</strong></td><td>${u.name}</td><td>${u.unit}</td><td>${u.department}</td><td><span class="badge done">Ativo</span></td></tr>`).join('')}</tbody></table></div></section>`) }
+
+function adminPage() {
     return shell(`
         <div class="page-head">
             <div>
@@ -1128,11 +2219,11 @@ function adminPage(){
     `);
 }
 
-function adminCatalogPage(){
+function adminCatalogPage() {
 
     const services = state.services
         .slice()
-        .sort((a,b) =>
+        .sort((a, b) =>
             (a.name || '').localeCompare(
                 b.name || '',
                 'pt-BR'
@@ -1194,10 +2285,9 @@ function adminCatalogPage(){
 
                     <tbody>
 
-                        ${
-                            services.length
-                                ? services
-                                    .map(service => `
+                        ${services.length
+            ? services
+                .map(service => `
                                         <tr>
 
                                             <td>
@@ -1207,17 +2297,15 @@ function adminCatalogPage(){
                                             </td>
 
                                             <td>
-                                                ${
-                                                    service.subcategories?.length || 0
-                                                }
+                                                ${service.subcategories?.length || 0
+                    }
                                             </td>
 
                                             <td>
-                                                ${
-                                                    service.active
-                                                        ? '<span class="badge done">Ativo</span>'
-                                                        : '<span class="badge">Inativo</span>'
-                                                }
+                                                ${service.active
+                        ? '<span class="badge done">Ativo</span>'
+                        : '<span class="badge">Inativo</span>'
+                    }
                                             </td>
 
                                            <td>
@@ -1237,11 +2325,10 @@ function adminCatalogPage(){
             type="button"
             data-toggle-service="${service.firestoreId}"
         >
-            ${
-                service.active
-                    ? 'Desativar'
-                    : 'Ativar'
-            }
+            ${service.active
+                        ? 'Desativar'
+                        : 'Ativar'
+                    }
         </button>
 
     </div>
@@ -1250,15 +2337,15 @@ function adminCatalogPage(){
 
                                         </tr>
                                     `)
-                                    .join('')
-                                : `
+                .join('')
+            : `
                                     <tr>
                                         <td colspan="4">
                                             Nenhum serviço cadastrado.
                                         </td>
                                     </tr>
                                 `
-                        }
+        }
 
                     </tbody>
 
@@ -1270,7 +2357,7 @@ function adminCatalogPage(){
     `);
 }
 
-function adminNewServicePage(){
+function adminNewServicePage() {
 
     return shell(`
         <div class="page-head">
@@ -1544,7 +2631,7 @@ function adminNewServicePage(){
     `);
 }
 
-function adminEditServicePage(service){
+function adminEditServicePage(service) {
 
     const subcategories =
         service.subcategories || [];
@@ -1563,12 +2650,12 @@ function adminEditServicePage(service){
 
                         const config =
                             subcategoryConfig[
-                                subcategory
+                            subcategory
                             ] || {};
 
                         const active =
                             subcategoryStatus[
-                                subcategory
+                            subcategory
                             ] !== false;
 
                         return `
@@ -1618,22 +2705,20 @@ function adminEditServicePage(service){
                                         >
                                             <option
                                                 value="Incidente"
-                                                ${
-                                                    config.type === 'Incidente'
-                                                        ? 'selected'
-                                                        : ''
-                                                }
+                                                ${config.type === 'Incidente'
+                                ? 'selected'
+                                : ''
+                            }
                                             >
                                                 Incidente
                                             </option>
 
                                             <option
                                                 value="Requisição"
-                                                ${
-                                                    config.type === 'Requisição'
-                                                        ? 'selected'
-                                                        : ''
-                                                }
+                                                ${config.type === 'Requisição'
+                                ? 'selected'
+                                : ''
+                            }
                                             >
                                                 Requisição
                                             </option>
@@ -1651,33 +2736,30 @@ function adminEditServicePage(service){
                                         >
                                             <option
                                                 value="Baixa"
-                                                ${
-                                                    config.criticality === 'Baixa'
-                                                        ? 'selected'
-                                                        : ''
-                                                }
+                                                ${config.criticality === 'Baixa'
+                                ? 'selected'
+                                : ''
+                            }
                                             >
                                                 Baixa
                                             </option>
 
                                             <option
                                                 value="Média"
-                                                ${
-                                                    config.criticality === 'Média'
-                                                        ? 'selected'
-                                                        : ''
-                                                }
+                                                ${config.criticality === 'Média'
+                                ? 'selected'
+                                : ''
+                            }
                                             >
                                                 Média
                                             </option>
 
                                             <option
                                                 value="Alta"
-                                                ${
-                                                    config.criticality === 'Alta'
-                                                        ? 'selected'
-                                                        : ''
-                                                }
+                                                ${config.criticality === 'Alta'
+                                ? 'selected'
+                                : ''
+                            }
                                             >
                                                 Alta
                                             </option>
@@ -1709,22 +2791,20 @@ function adminEditServicePage(service){
                                         >
                                             <option
                                                 value="true"
-                                                ${
-                                                    active
-                                                        ? 'selected'
-                                                        : ''
-                                                }
+                                                ${active
+                                ? 'selected'
+                                : ''
+                            }
                                             >
                                                 Ativa
                                             </option>
 
                                             <option
                                                 value="false"
-                                                ${
-                                                    !active
-                                                        ? 'selected'
-                                                        : ''
-                                                }
+                                                ${!active
+                                ? 'selected'
+                                : ''
+                            }
                                             >
                                                 Inativa
                                             </option>
@@ -1895,22 +2975,20 @@ function adminEditServicePage(service){
                         >
                             <option
                                 value="true"
-                                ${
-                                    service.active !== false
-                                        ? 'selected'
-                                        : ''
-                                }
+                                ${service.active !== false
+            ? 'selected'
+            : ''
+        }
                             >
                                 Ativo
                             </option>
 
                             <option
                                 value="false"
-                                ${
-                                    service.active === false
-                                        ? 'selected'
-                                        : ''
-                                }
+                                ${service.active === false
+            ? 'selected'
+            : ''
+        }
                             >
                                 Inativo
                             </option>
@@ -1999,9 +3077,8 @@ function adminUsersPage() {
                 Usuários cadastrados
             </h3>
 
-            ${
-                list.length
-                    ? `
+            ${list.length
+            ? `
                         <div class="table-wrap">
 
                             <table class="tickets">
@@ -2022,17 +3099,17 @@ function adminUsersPage() {
 
                                     ${list.map(u => {
 
-                                        const ativo =
-                                            u.active !== false;
+                const ativo =
+                    u.active !== false;
 
-                                        const role =
-                                            u.role === 'admin'
-                                                ? 'Administrador'
-                                                : u.role === 'technician'
-                                                    ? 'Técnico'
-                                                    : 'Solicitante';
+                const role =
+                    u.role === 'admin'
+                        ? 'Administrador'
+                        : u.role === 'technician'
+                            ? 'Técnico'
+                            : 'Solicitante';
 
-                                        return `
+                return `
                                             <tr>
 
                                                 <td>
@@ -2075,7 +3152,7 @@ function adminUsersPage() {
                                             </tr>
                                         `;
 
-                                    }).join('')}
+            }).join('')}
 
                                 </tbody>
 
@@ -2083,12 +3160,12 @@ function adminUsersPage() {
 
                         </div>
                     `
-                    : `
+            : `
                         <div class="empty">
                             Nenhum usuário cadastrado.
                         </div>
                     `
-            }
+        }
 
         </section>
     `);
@@ -2241,13 +3318,13 @@ function adminEditUserPage(user) {
     `);
 }
 
-function detail(){
+function detail() {
 
     const t = tickets().find(
         x => x.id === state.selected
     );
 
-    if(!t)
+    if (!t)
         return mine();
 
     const tech =
@@ -2262,14 +3339,14 @@ function detail(){
         t.status !== 'Concluído';
 
     const canPending =
-    tech &&
-    t.responsible === state.user.name &&
-    t.status === 'Em análise';    
+        tech &&
+        t.responsible === state.user.name &&
+        t.status === 'Em análise';
 
     const canResume =
-    tech &&
-    t.responsible === state.user.name &&
-    t.status === 'Pendente';
+        tech &&
+        t.responsible === state.user.name &&
+        t.status === 'Pendente';
 
     return shell(`
         <div class="page-head">
@@ -2284,7 +3361,7 @@ function detail(){
                 </button>
 
                 <h2 style="margin-top:12px">
-                    Chamado #2026-${t.id}
+                     Chamado ${numeroChamado(t)}
                 </h2>
 
                 <p>
@@ -2349,15 +3426,27 @@ ${canResume ? `
 
             <div class="detail-grid">
 
-                <div>
-                    <span>Solicitante</span>
-                    <strong>${t.requester}</strong>
-                </div>
+              <div>
+    <span>Solicitante</span>
+    <strong>
+        ${t.requesterName || t.requester}
+    </strong>
+</div>
 
-                <div>
-                    <span>Serviço</span>
-                    <strong>${t.service}</strong>
-                </div>
+${t.openedBy
+            ? `
+            <div>
+                <span>Aberto por</span>
+                <strong>${t.openedBy}</strong>
+            </div>
+        `
+            : ''
+        }
+
+<div>
+    <span>Serviço</span>
+    <strong>${t.service}</strong>
+</div>
 
                 <div>
                     <span>Subcategoria</span>
@@ -2402,8 +3491,8 @@ ${canResume ? `
                         <span>Resultado da SLA</span>
                         <strong
                             class="${result === 'Dentro da SLA'
-                                ? 'sla-ok'
-                                : 'sla-late'}"
+                ? 'sla-ok'
+                : 'sla-late'}"
                         >
                             ${result}
                         </strong>
@@ -2462,6 +3551,45 @@ ${canResume ? `
                     </div>
                 ` : ''}
 
+                                ${(Array.isArray(t.pendingHistory)
+                    ? t.pendingHistory
+                    : []
+                ).map(pending => `
+                    <div class="event">
+
+                        <strong>
+                            Chamado colocado em Pendente
+                        </strong>
+
+                        <p>
+                            <strong>Motivo:</strong>
+                            ${pending.reason || 'Não informado'}
+                        </p>
+
+                        ${pending.description ? `
+                            <p>
+                                <strong>Descrição:</strong>
+                                ${pending.description}
+                            </p>
+                        ` : ''}
+
+                        <time>
+                            ${formatDate(pending.startedAt)}
+                        </time>
+
+                        ${pending.endedAt ? `
+                            <p>
+                                <strong>Atendimento retomado por:</strong>
+                                ${pending.resumedBy || 'Não informado'}
+                            </p>
+
+                            <time>
+                                ${formatDate(pending.endedAt)}
+                            </time>
+                        ` : ''}
+                    </div>
+                `).join('')}
+
                 ${t.status === 'Concluído' ? `
                     <div class="event">
 
@@ -2481,7 +3609,7 @@ ${canResume ? `
         </section>
     `);
 }
-function render(){
+function render() {
 
     let page =
         !state.user
@@ -2492,25 +3620,29 @@ function render(){
                     ? mine()
                     : state.view === 'queue'
                         ? queue()
-                        : state.view === 'admin'
-                            ? adminPage()
-                            : state.view === 'admin-users'
-                                ? adminUsersPage()
-                                    : state.view === 'admin-catalog'
-    ? adminCatalogPage()
-: state.view === 'admin-new-service'
-    ? adminNewServicePage()
-    : state.view === 'admin-edit-service'
-        ? adminEditServicePage(state.selected)
-        : state.view === 'admin-user-edit'
-            ? adminEditUserPage(state.selected)
-            : detail();
+                        : state.view === 'new-on-behalf'
+                            ? newTicketOnBehalf()
+                            : state.view === 'search-tickets'
+                                ? searchTickets()
+                                : state.view === 'admin'
+                                    ? adminPage()
+                                    : state.view === 'admin-users'
+                                        ? adminUsersPage()
+                                        : state.view === 'admin-catalog'
+                                            ? adminCatalogPage()
+                                            : state.view === 'admin-new-service'
+                                                ? adminNewServicePage()
+                                                : state.view === 'admin-edit-service'
+                                                    ? adminEditServicePage(state.selected)
+                                                    : state.view === 'admin-user-edit'
+                                                        ? adminEditUserPage(state.selected)
+                                                        : detail();
 
-$('#app').innerHTML = page;
+    $('#app').innerHTML = page;
 
     bind();
 }
-function updateForm(){
+function updateForm() {
 
     const serviceName =
         $('#service')?.value;
@@ -2518,10 +3650,10 @@ function updateForm(){
     const subcategory =
         $('#subcategory')?.value;
 
-    if(
+    if (
         !serviceName ||
         !subcategory
-    ){
+    ) {
 
         $('#type').value =
             'Será definido automaticamente';
@@ -2541,7 +3673,7 @@ function updateForm(){
                 item.name === serviceName
         );
 
-    if(!service){
+    if (!service) {
 
         $('#type').value =
             'Não configurado';
@@ -2558,7 +3690,7 @@ function updateForm(){
     const config =
         service.subcategoryConfig?.[subcategory];
 
-    if(!config){
+    if (!config) {
 
         $('#type').value =
             'Não configurado';
@@ -2585,40 +3717,40 @@ function updateForm(){
 }
 
 
-async function bind(){
+async function bind() {
 
     console.log('BIND EXECUTADO', state.user);
 
-    if(!state.user){
+    if (!state.user) {
         const createAccount = $('#create-account');
 
-    if(createAccount){
+        if (createAccount) {
 
-    createAccount.onclick = () => {
+            createAccount.onclick = () => {
 
-        $('#app').innerHTML = cadastro();
+                $('#app').innerHTML = cadastro();
 
-        bind();
-    };
-    }
+                bind();
+            };
+        }
 
-    const backToLogin = $('#back-to-login');
+        const backToLogin = $('#back-to-login');
 
-    if(backToLogin){
+        if (backToLogin) {
 
-    backToLogin.onclick = () => {
+            backToLogin.onclick = () => {
 
-        $('#app').innerHTML = login();
+                $('#app').innerHTML = login();
 
-        bind();
-    };
-    }
+                bind();
+            };
+        }
 
-    
+
 
         const loginForm = $('#login-form');
 
-        if(loginForm){
+        if (loginForm) {
 
             loginForm.onsubmit = async e => {
 
@@ -2639,7 +3771,7 @@ async function bind(){
                         password
                     );
 
-                } catch(err) {
+                } catch (err) {
 
                     console.error(
                         'Erro no login:',
@@ -2649,16 +3781,16 @@ async function bind(){
                     let message =
                         'Não foi possível realizar o login.';
 
-                    if(
+                    if (
                         err.code === 'auth/invalid-credential' ||
                         err.code === 'auth/wrong-password' ||
                         err.code === 'auth/user-not-found'
-                    ){
+                    ) {
                         message =
                             'E-mail ou senha inválidos.';
                     }
 
-                    if(err.code === 'auth/too-many-requests'){
+                    if (err.code === 'auth/too-many-requests') {
                         message =
                             'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
                     }
@@ -2674,7 +3806,7 @@ async function bind(){
 
         const googleLogin = $('#google-login');
 
-        if(googleLogin){
+        if (googleLogin) {
 
             googleLogin.onclick = async () => {
 
@@ -2689,7 +3821,7 @@ async function bind(){
                         googleProvider
                     );
 
-                } catch(err) {
+                } catch (err) {
 
                     console.error(
                         'Erro no login Google:',
@@ -2699,10 +3831,10 @@ async function bind(){
                     let message =
                         'Não foi possível entrar com o Google.';
 
-                    if(
+                    if (
                         err.code ===
                         'auth/popup-closed-by-user'
-                    ){
+                    ) {
                         message =
                             'A janela de login foi fechada.';
                     }
@@ -2716,9 +3848,9 @@ async function bind(){
             };
         }
 
-                const registerForm = $('#register-form');
+        const registerForm = $('#register-form');
 
-        if(registerForm){
+        if (registerForm) {
 
             registerForm.onsubmit = async e => {
 
@@ -2741,7 +3873,7 @@ async function bind(){
 
                 error.innerHTML = '';
 
-                if(password !== confirmPassword){
+                if (password !== confirmPassword) {
 
                     error.innerHTML = `
                         <div class="message error">
@@ -2774,7 +3906,7 @@ async function bind(){
                         }
                     );
 
-                } catch(err){
+                } catch (err) {
 
                     console.error(
                         'Erro ao criar conta:',
@@ -2803,7 +3935,7 @@ async function bind(){
 
             await signOut(auth);
 
-        } catch(err) {
+        } catch (err) {
 
             console.error(err);
         }
@@ -2817,136 +3949,312 @@ async function bind(){
 
     document
         .querySelectorAll('[data-view]')
-        .forEach(b =>
-            b.onclick = () => {
+        .forEach(
+            b =>
+                b.onclick = async () => {
 
-                state.view = b.dataset.view;
-                state.selected = null;
+                    state.view =
+                        b.dataset.view;
+
+                    state.selected =
+                        null;
+
+
+                                       if (
+                        state.view === 'new-on-behalf' ||
+                        state.view === 'search-tickets'
+                    ) {
+
+                        try {
+
+                            if (
+                                state.view ===
+                                'new-on-behalf'
+                            ) {
+
+                                await loadUsers(
+                                    'active-requesters'
+                                );
+
+                            } else {
+
+                                await loadUsers(
+                                    'all-requesters'
+                                );
+                            }
+
+                        } catch (err) {
+
+                            console.error(
+                                'Erro ao carregar usuários:',
+                                err
+                            );
+
+                            alert(
+                                'Não foi possível carregar os usuários. ' +
+                                'Verifique o acesso ao Firestore.'
+                            );
+
+                            return;
+                        }
+                    }
+
+
+                    render();
+                }
+        );
+
+    const queueResponsible =
+        $('#queue-responsible');
+
+    if (queueResponsible) {
+
+        queueResponsible.onchange = () => {
+
+            state.queueResponsible =
+                queueResponsible.value;
+
+                state.queuePage = 1;
+
+            render();
+        };
+    }
+
+        /*
+     * Paginação da fila de chamados
+     */
+
+    const queuePageSize =
+        $('#queue-page-size');
+
+    if (queuePageSize) {
+
+        queuePageSize.onchange = () => {
+
+            state.queuePageSize =
+                Number(queuePageSize.value);
+
+            state.queuePage = 1;
+
+            render();
+        };
+    }
+
+    const queuePrev =
+        $('#queue-prev');
+
+    if (queuePrev) {
+
+        queuePrev.onclick = () => {
+
+            if (state.queuePage > 1) {
+
+                state.queuePage--;
 
                 render();
             }
-        );
+        };
+    }
 
-        document
-        .querySelectorAll('[data-admin]')
-    .forEach(b => {
+    const queueNext =
+        $('#queue-next');
 
-        b.onclick = async () => {
+    if (queueNext) {
 
-            if(state.user.role !== 'admin'){
-                return;
+        queueNext.onclick = () => {
+
+            state.queuePage++;
+
+            render();
+        };
+    }
+
+    const mineStatus =
+        $('#mine-status');
+
+    if (mineStatus) {
+
+        mineStatus.onchange = () => {
+
+            state.mineStatus =
+                mineStatus.value;
+
+                state.minePage = 1;
+
+            render();
+        };
+    }
+
+        /*
+     * Paginação dos chamados do solicitante
+     */
+
+    const minePageSize =
+        $('#mine-page-size');
+
+    if (minePageSize) {
+
+        minePageSize.onchange = () => {
+
+            state.minePageSize =
+                Number(minePageSize.value);
+
+            state.minePage = 1;
+
+            render();
+        };
+    }
+
+    const minePrev =
+        $('#mine-prev');
+
+    if (minePrev) {
+
+        minePrev.onclick = () => {
+
+            if (state.minePage > 1) {
+
+                state.minePage--;
+
+                render();
             }
+        };
+    }
 
-            if(b.dataset.admin === 'users'){
+    const mineNext =
+        $('#mine-next');
 
-                try {
+    if (mineNext) {
 
-                    await loadUsers();
+        mineNext.onclick = () => {
 
-                    state.view = 'admin-users';
+            state.minePage++;
+
+            render();
+        };
+    }
+
+
+    document
+        .querySelectorAll('[data-admin]')
+        .forEach(b => {
+
+            b.onclick = async () => {
+
+                if (state.user.role !== 'admin') {
+                    return;
+                }
+
+                if (b.dataset.admin === 'users') {
+
+                    try {
+
+                        await loadUsers();
+
+                        state.view = 'admin-users';
+                        state.selected = null;
+
+                        render();
+
+                    } catch (err) {
+
+                        console.error(
+                            'Erro ao carregar usuários:',
+                            err
+                        );
+
+                        state.message =
+                            'Não foi possível carregar os usuários.';
+
+                        render();
+                    }
+                }
+                if (b.dataset.admin === 'new-service') {
+
+                    state.view = 'admin-new-service';
                     state.selected = null;
 
                     render();
 
-                } catch(err) {
-
-                    console.error(
-                        'Erro ao carregar usuários:',
-                        err
-                    );
-
-                    state.message =
-                        'Não foi possível carregar os usuários.';
-
-                    render();
+                    return;
                 }
-            }
-            if(b.dataset.admin === 'new-service'){
 
-    state.view = 'admin-new-service';
-    state.selected = null;
+                if (b.dataset.admin === 'catalog') {
 
-    render();
+                    if (state.user.role !== 'admin') return;
 
-    return;
-}
+                    try {
 
-  if(b.dataset.admin === 'catalog'){
+                        await loadServices();
 
-    if(state.user.role !== 'admin') return;
+                        state.view = 'admin-catalog';
+                        state.selected = null;
 
-    try{
+                        render();
 
-        await loadServices();
+                    } catch (err) {
 
-        state.view = 'admin-catalog';
-        state.selected = null;
+                        console.error(
+                            'Erro ao carregar serviços:',
+                            err
+                        );
 
-        render();
+                        alert(
+                            'Não foi possível carregar a Central de Serviços.'
+                        );
+                    }
 
-    }catch(err){
+                    document.querySelectorAll('[data-toggle-service]').forEach(button => {
 
-        console.error(
-            'Erro ao carregar serviços:',
-            err
-        );
+                        button.onclick = async () => {
 
-        alert(
-            'Não foi possível carregar a Central de Serviços.'
-        );
-    }
+                            if (state.user.role !== 'admin') return;
 
-    document.querySelectorAll('[data-toggle-service]').forEach(button => {
+                            const service = state.services.find(
+                                item => item.firestoreId === button.dataset.toggleService
+                            );
 
-    button.onclick = async () => {
+                            if (!service) return;
 
-        if(state.user.role !== 'admin') return;
+                            try {
 
-        const service = state.services.find(
-            item => item.firestoreId === button.dataset.toggleService
-        );
+                                await updateDoc(
+                                    doc(db, 'services', service.firestoreId),
+                                    {
+                                        active: !service.active
+                                    }
+                                );
 
-        if(!service) return;
+                                await loadServices();
 
-        try {
+                                render();
 
-            await updateDoc(
-                doc(db, 'services', service.firestoreId),
-                {
-                    active: !service.active
+                            } catch (err) {
+
+                                console.error(
+                                    'Erro ao alterar status do serviço:',
+                                    err
+                                );
+
+                                alert(
+                                    'Não foi possível alterar o status do serviço.'
+                                );
+                            }
+                        };
+
+                    });
+
+                    return;
                 }
-            );
 
-            await loadServices();
+            };
 
-            render();
+        });
 
-        } catch(err) {
-
-            console.error(
-                'Erro ao alterar status do serviço:',
-                err
-            );
-
-            alert(
-                'Não foi possível alterar o status do serviço.'
-            );
-        }
-    };
-
-});
-
-    return;
-}
-
-        };
-
-    });
-
-           const addSubcategory =
+    const addSubcategory =
         $('#admin-add-subcategory');
 
-    if(addSubcategory){
+    if (addSubcategory) {
 
         addSubcategory.onclick = () => {
 
@@ -2958,7 +4266,7 @@ async function bind(){
                     '.subcategory-editor'
                 );
 
-            if(!container || !first){
+            if (!container || !first) {
                 return;
             }
 
@@ -2992,7 +4300,7 @@ async function bind(){
                             '.subcategory-title'
                         );
 
-                    if(title){
+                    if (title) {
 
                         title.textContent =
                             `Subcategoria ${index + 1}`;
@@ -3002,60 +4310,90 @@ async function bind(){
         };
     }
 
-  const addEditSubcategory =
-    $('#add-edit-subcategory');
+    const addEditSubcategory =
+        $('#add-edit-subcategory');
 
-if(addEditSubcategory){
+    if (addEditSubcategory) {
 
-    addEditSubcategory.onclick = () => {
+        addEditSubcategory.onclick = () => {
 
-        const container =
-            $('#edit-subcategories-container');
+            const container =
+                $('#edit-subcategories-container');
 
-        const first =
-            container?.querySelector(
-                '.subcategory-editor'
+            const first =
+                container?.querySelector(
+                    '.subcategory-editor'
+                );
+
+            if (!container || !first) {
+                return;
+            }
+
+            const clone =
+                first.cloneNode(true);
+
+            clone
+                .querySelectorAll('input')
+                .forEach(input => {
+
+                    input.value = '';
+                });
+
+            clone
+                .querySelectorAll('select')
+                .forEach(select => {
+
+                    select.selectedIndex = 0;
+                });
+
+            const removeButton =
+                document.createElement('button');
+
+            removeButton.type =
+                'button';
+
+            removeButton.className =
+                'secondary';
+
+            removeButton.textContent =
+                'Remover';
+
+            removeButton.style.marginTop =
+                '16px';
+
+            removeButton.onclick = () => {
+
+                clone.remove();
+
+                const editors =
+                    container.querySelectorAll(
+                        '.subcategory-editor'
+                    );
+
+                editors.forEach(
+                    (editor, index) => {
+
+                        const title =
+                            editor.querySelector(
+                                '.subcategory-title'
+                            );
+
+                        if (title) {
+
+                            title.textContent =
+                                `Subcategoria ${index + 1}`;
+                        }
+                    }
+                );
+            };
+
+            clone.appendChild(
+                removeButton
             );
 
-        if(!container || !first){
-            return;
-        }
-
-        const clone =
-            first.cloneNode(true);
-
-        clone
-            .querySelectorAll('input')
-            .forEach(input => {
-
-                input.value = '';
-            });
-
-        clone
-            .querySelectorAll('select')
-            .forEach(select => {
-
-                select.selectedIndex = 0;
-            });
-
-        const removeButton =
-            document.createElement('button');
-
-        removeButton.type =
-            'button';
-
-        removeButton.className =
-            'secondary';
-
-        removeButton.textContent =
-            'Remover';
-
-        removeButton.style.marginTop =
-            '16px';
-
-        removeButton.onclick = () => {
-
-            clone.remove();
+            container.appendChild(
+                clone
+            );
 
             const editors =
                 container.querySelectorAll(
@@ -3070,7 +4408,7 @@ if(addEditSubcategory){
                             '.subcategory-title'
                         );
 
-                    if(title){
+                    if (title) {
 
                         title.textContent =
                             `Subcategoria ${index + 1}`;
@@ -3078,45 +4416,15 @@ if(addEditSubcategory){
                 }
             );
         };
+    }
 
-        clone.appendChild(
-            removeButton
-        );
-
-        container.appendChild(
-            clone
-        );
-
-        const editors =
-            container.querySelectorAll(
-                '.subcategory-editor'
-            );
-
-        editors.forEach(
-            (editor, index) => {
-
-                const title =
-                    editor.querySelector(
-                        '.subcategory-title'
-                    );
-
-                if(title){
-
-                    title.textContent =
-                        `Subcategoria ${index + 1}`;
-                }
-            }
-        );
-    };
-}
-
-        document
+    document
         .querySelectorAll('[data-edit-service]')
         .forEach(b => {
 
             b.onclick = () => {
 
-                if(state.user.role !== 'admin'){
+                if (state.user.role !== 'admin') {
                     return;
                 }
 
@@ -3127,7 +4435,7 @@ if(addEditSubcategory){
                             b.dataset.editService
                     );
 
-                if(!service){
+                if (!service) {
 
                     console.error(
                         'Serviço não encontrado:',
@@ -3148,36 +4456,36 @@ if(addEditSubcategory){
         });
 
     document
-    .querySelectorAll('[data-edit-user]')
-    .forEach(b => {
+        .querySelectorAll('[data-edit-user]')
+        .forEach(b => {
 
-        b.onclick = () => {
+            b.onclick = () => {
 
-            if(state.user.role !== 'admin'){
-                return;
-            }
+                if (state.user.role !== 'admin') {
+                    return;
+                }
 
-            const user =
-                state.users.find(
-                    u => u.firestoreId === b.dataset.editUser
-                );
+                const user =
+                    state.users.find(
+                        u => u.firestoreId === b.dataset.editUser
+                    );
 
-            if(!user){
-                console.error(
-                    'Usuário não encontrado:',
-                    b.dataset.editUser
-                );
+                if (!user) {
+                    console.error(
+                        'Usuário não encontrado:',
+                        b.dataset.editUser
+                    );
 
-                return;
-            }
+                    return;
+                }
 
-            state.selected = user;
-            state.view = 'admin-user-edit';
+                state.selected = user;
+                state.view = 'admin-user-edit';
 
-            render();
-        };
+                render();
+            };
 
-    });
+        });
 
     document
         .querySelectorAll('[data-ticket]')
@@ -3195,100 +4503,29 @@ if(addEditSubcategory){
         );
 
     document.querySelectorAll('[data-capture]').forEach(b =>
-    b.onclick = async () => {
-
-        const t = state.tickets.find(
-            x => x.id === Number(b.dataset.capture)
-        );
-
-        if (!t) {
-            console.error('Chamado não encontrado:', b.dataset.capture);
-            return;
-        }
-
-        try {
-
-            await updateDoc(
-        doc(db, 'tickets', t.firestoreId),
-        {
-        responsible: state.user.name,
-        status: 'Em análise',
-        responsibilityHistory: [
-            ...(t.responsibilityHistory || []),
-            {
-                action: 'captura',
-                from: t.responsible || null,
-                to: state.user.name,
-                date: new Date().toISOString()
-            }
-        ]
-        }
-            );
-
-            await loadTickets();
-
-            render();
-
-        } catch (err) {
-
-            console.error(
-                'Erro ao capturar chamado:',
-                err
-            );
-
-            alert(
-                'Não foi possível capturar o chamado. ' +
-                'Verifique o acesso ao Firestore.'
-            );
-        }
-    }
-    );
-
-    document
-    .querySelectorAll('[data-assume]')
-    .forEach(b =>
         b.onclick = async () => {
 
             const t = state.tickets.find(
-                x => x.id === Number(b.dataset.assume)
+                x => x.id === Number(b.dataset.capture)
             );
 
-            if(!t){
-
-                console.error(
-                    'Chamado não encontrado:',
-                    b.dataset.assume
-                );
-
+            if (!t) {
+                console.error('Chamado não encontrado:', b.dataset.capture);
                 return;
             }
 
-            if(
-    !t.responsible ||
-    t.responsible === state.user.name ||
-    t.status === 'Concluído'
-){
-
-    return;
-}
-
-            try{
+            try {
 
                 await updateDoc(
-                    doc(
-                        db,
-                        'tickets',
-                        t.firestoreId
-                    ),
+                    doc(db, 'tickets', t.firestoreId),
                     {
                         responsible: state.user.name,
                         status: 'Em análise',
-
                         responsibilityHistory: [
                             ...(t.responsibilityHistory || []),
                             {
-                                action: 'transferência',
-                                from: t.responsible,
+                                action: 'captura',
+                                from: t.responsible || null,
                                 to: state.user.name,
                                 date: new Date().toISOString()
                             }
@@ -3300,22 +4537,93 @@ if(addEditSubcategory){
 
                 render();
 
-            }catch(err){
+            } catch (err) {
 
                 console.error(
-                    'Erro ao assumir atendimento:',
+                    'Erro ao capturar chamado:',
                     err
                 );
 
                 alert(
-                    'Não foi possível assumir o atendimento. ' +
+                    'Não foi possível capturar o chamado. ' +
                     'Verifique o acesso ao Firestore.'
                 );
             }
         }
     );
 
-        if($('#user-form'))
+    document
+        .querySelectorAll('[data-assume]')
+        .forEach(b =>
+            b.onclick = async () => {
+
+                const t = state.tickets.find(
+                    x => x.id === Number(b.dataset.assume)
+                );
+
+                if (!t) {
+
+                    console.error(
+                        'Chamado não encontrado:',
+                        b.dataset.assume
+                    );
+
+                    return;
+                }
+
+                if (
+                    !t.responsible ||
+                    t.responsible === state.user.name ||
+                    t.status === 'Concluído'
+                ) {
+
+                    return;
+                }
+
+                try {
+
+                    await updateDoc(
+                        doc(
+                            db,
+                            'tickets',
+                            t.firestoreId
+                        ),
+                        {
+                            responsible: state.user.name,
+                            status: 'Em análise',
+
+                            responsibilityHistory: [
+                                ...(t.responsibilityHistory || []),
+                                {
+                                    action: 'transferência',
+                                    from: t.responsible,
+                                    to: state.user.name,
+                                    date: new Date().toISOString()
+                                }
+                            ]
+                        }
+                    );
+
+                    await loadTickets();
+
+                    render();
+
+                } catch (err) {
+
+                    console.error(
+                        'Erro ao assumir atendimento:',
+                        err
+                    );
+
+                    alert(
+                        'Não foi possível assumir o atendimento. ' +
+                        'Verifique o acesso ao Firestore.'
+                    );
+                }
+            }
+        );
+
+    if ($('#user-form'))
         $('#user-form').onsubmit = e => {
 
             e.preventDefault();
@@ -3328,11 +4636,11 @@ if(addEditSubcategory){
                     .trim()
                     .toLowerCase();
 
-            if(
+            if (
                 list.some(
                     u => u.username === username
                 )
-            ){
+            ) {
                 alert(
                     'Este usuário já está cadastrado.'
                 );
@@ -3363,9 +4671,9 @@ if(addEditSubcategory){
             render();
         };
 
-        const editUserForm = $('#edit-user-form');
+    const editUserForm = $('#edit-user-form');
 
-        if(editUserForm){
+    if (editUserForm) {
 
         editUserForm.onsubmit = async e => {
 
@@ -3373,7 +4681,7 @@ if(addEditSubcategory){
 
             const user = state.selected;
 
-            if(!user){
+            if (!user) {
                 alert('Usuário não encontrado.');
                 return;
             }
@@ -3393,7 +4701,7 @@ if(addEditSubcategory){
             const department =
                 $('#edit-user-department').value.trim();
 
-            try{
+            try {
 
                 await updateDoc(
                     doc(db, 'users', user.firestoreId),
@@ -3413,7 +4721,7 @@ if(addEditSubcategory){
 
                 render();
 
-            }catch(err){
+            } catch (err) {
 
                 console.error(
                     'Erro ao atualizar usuário:',
@@ -3428,14 +4736,14 @@ if(addEditSubcategory){
         };
     }
 
-        /*
-     * Formulário de criação de serviço
-     */
+    /*
+ * Formulário de criação de serviço
+ */
 
     const adminServiceForm =
         $('#admin-service-form');
 
-    if(adminServiceForm){
+    if (adminServiceForm) {
 
         adminServiceForm.onsubmit = async e => {
 
@@ -3459,7 +4767,7 @@ if(addEditSubcategory){
             const subcategoryStatus = {};
             const subcategoryConfig = {};
 
-            for(const editor of editors){
+            for (const editor of editors) {
 
                 const name =
                     editor
@@ -3499,7 +4807,7 @@ if(addEditSubcategory){
                         )
                         ?.value === 'true';
 
-                if(!name){
+                if (!name) {
 
                     alert(
                         'Informe o nome de todas as subcategorias.'
@@ -3508,7 +4816,7 @@ if(addEditSubcategory){
                     return;
                 }
 
-                if(!Number.isInteger(sla) || sla < 1){
+                if (!Number.isInteger(sla) || sla < 1) {
 
                     alert(
                         `Informe um SLA válido para a subcategoria "${name}".`
@@ -3517,13 +4825,13 @@ if(addEditSubcategory){
                     return;
                 }
 
-                if(
+                if (
                     subcategories.some(
                         item =>
                             item.toLowerCase() ===
                             name.toLowerCase()
                     )
-                ){
+                ) {
 
                     alert(
                         `A subcategoria "${name}" está duplicada.`
@@ -3545,7 +4853,7 @@ if(addEditSubcategory){
                 };
             }
 
-            if(!subcategories.length){
+            if (!subcategories.length) {
 
                 alert(
                     'Cadastre pelo menos uma subcategoria.'
@@ -3563,7 +4871,7 @@ if(addEditSubcategory){
                         serviceName.toLowerCase()
                 );
 
-            if(existingService){
+            if (existingService) {
 
                 alert(
                     'Já existe um serviço com esse nome.'
@@ -3572,7 +4880,7 @@ if(addEditSubcategory){
                 return;
             }
 
-            try{
+            try {
 
                 await addDoc(
                     collection(
@@ -3597,7 +4905,7 @@ if(addEditSubcategory){
 
                 render();
 
-            }catch(err){
+            } catch (err) {
 
                 console.error(
                     'Erro ao criar serviço:',
@@ -3617,204 +4925,204 @@ if(addEditSubcategory){
  * Formulário de edição de serviço
  */
 
-const adminEditServiceForm =
-    $('#admin-edit-service-form');
+    const adminEditServiceForm =
+        $('#admin-edit-service-form');
 
-if(adminEditServiceForm){
+    if (adminEditServiceForm) {
 
-    adminEditServiceForm.onsubmit = async e => {
+        adminEditServiceForm.onsubmit = async e => {
 
-        e.preventDefault();
+            e.preventDefault();
 
-        const service =
-            state.selected;
+            const service =
+                state.selected;
 
-        if(!service){
+            if (!service) {
 
-            alert(
-                'Serviço não encontrado.'
-            );
+                alert(
+                    'Serviço não encontrado.'
+                );
 
-            return;
-        }
+                return;
+            }
 
-        const serviceName =
-            $('#admin-edit-service-name')
-                .value
-                .trim();
-
-        const serviceActive =
-            $('#admin-edit-service-active')
-                .value === 'true';
-
-        const editors =
-            document.querySelectorAll(
-                '#edit-subcategories-container .subcategory-editor'
-            );
-
-        const subcategories = [];
-        const subcategoryStatus = {};
-        const subcategoryConfig = {};
-
-        for(const editor of editors){
-
-            const name =
-                editor
-                    .querySelector(
-                        '.admin-subcategory-name'
-                    )
-                    ?.value
+            const serviceName =
+                $('#admin-edit-service-name')
+                    .value
                     .trim();
 
-            const type =
-                editor
-                    .querySelector(
-                        '.admin-subcategory-type'
-                    )
-                    ?.value;
+            const serviceActive =
+                $('#admin-edit-service-active')
+                    .value === 'true';
 
-            const criticality =
-                editor
-                    .querySelector(
-                        '.admin-subcategory-criticality'
-                    )
-                    ?.value;
+            const editors =
+                document.querySelectorAll(
+                    '#edit-subcategories-container .subcategory-editor'
+                );
 
-            const sla =
-                Number(
+            const subcategories = [];
+            const subcategoryStatus = {};
+            const subcategoryConfig = {};
+
+            for (const editor of editors) {
+
+                const name =
                     editor
                         .querySelector(
-                            '.admin-subcategory-sla'
+                            '.admin-subcategory-name'
                         )
                         ?.value
-                );
+                        .trim();
 
-            const active =
-                editor
-                    .querySelector(
-                        '.admin-subcategory-active'
-                    )
-                    ?.value === 'true';
+                const type =
+                    editor
+                        .querySelector(
+                            '.admin-subcategory-type'
+                        )
+                        ?.value;
 
-            if(!name){
+                const criticality =
+                    editor
+                        .querySelector(
+                            '.admin-subcategory-criticality'
+                        )
+                        ?.value;
 
-                alert(
-                    'Informe o nome de todas as subcategorias.'
-                );
+                const sla =
+                    Number(
+                        editor
+                            .querySelector(
+                                '.admin-subcategory-sla'
+                            )
+                            ?.value
+                    );
 
-                return;
-            }
+                const active =
+                    editor
+                        .querySelector(
+                            '.admin-subcategory-active'
+                        )
+                        ?.value === 'true';
 
-            if(!Number.isInteger(sla) || sla < 1){
+                if (!name) {
 
-                alert(
-                    `Informe um SLA válido para a subcategoria "${name}".`
-                );
+                    alert(
+                        'Informe o nome de todas as subcategorias.'
+                    );
 
-                return;
-            }
-
-            if(
-                subcategories.some(
-                    item =>
-                        item.toLowerCase() ===
-                        name.toLowerCase()
-                )
-            ){
-
-                alert(
-                    `A subcategoria "${name}" está duplicada.`
-                );
-
-                return;
-            }
-
-            subcategories.push(name);
-
-            subcategoryStatus[name] =
-                active;
-
-            subcategoryConfig[name] = {
-
-                type,
-
-                criticality,
-
-                sla,
-
-                active
-            };
-        }
-
-        if(!subcategories.length){
-
-            alert(
-                'O serviço precisa possuir pelo menos uma subcategoria.'
-            );
-
-            return;
-        }
-
-        const existingService =
-            state.services.find(
-                item =>
-                    item.firestoreId !==
-                        service.firestoreId &&
-                    (item.name || '')
-                        .trim()
-                        .toLowerCase() ===
-                    serviceName.toLowerCase()
-            );
-
-        if(existingService){
-
-            alert(
-                'Já existe outro serviço com esse nome.'
-            );
-
-            return;
-        }
-
-        try{
-
-            await updateDoc(
-                doc(
-                    db,
-                    'services',
-                    service.firestoreId
-                ),
-                {
-                    name: serviceName,
-                    active: serviceActive,
-                    subcategories,
-                    subcategoryStatus,
-                    subcategoryConfig
+                    return;
                 }
-            );
 
-            await loadServices();
+                if (!Number.isInteger(sla) || sla < 1) {
 
-            state.selected = null;
+                    alert(
+                        `Informe um SLA válido para a subcategoria "${name}".`
+                    );
 
-            state.view =
-                'admin-catalog';
+                    return;
+                }
 
-            render();
+                if (
+                    subcategories.some(
+                        item =>
+                            item.toLowerCase() ===
+                            name.toLowerCase()
+                    )
+                ) {
 
-        }catch(err){
+                    alert(
+                        `A subcategoria "${name}" está duplicada.`
+                    );
 
-            console.error(
-                'Erro ao atualizar serviço:',
-                err
-            );
+                    return;
+                }
 
-            alert(
-                'Não foi possível salvar as alterações do serviço. ' +
-                'Verifique o acesso ao Firestore.'
-            );
-        }
-    };
-}
+                subcategories.push(name);
+
+                subcategoryStatus[name] =
+                    active;
+
+                subcategoryConfig[name] = {
+
+                    type,
+
+                    criticality,
+
+                    sla,
+
+                    active
+                };
+            }
+
+            if (!subcategories.length) {
+
+                alert(
+                    'O serviço precisa possuir pelo menos uma subcategoria.'
+                );
+
+                return;
+            }
+
+            const existingService =
+                state.services.find(
+                    item =>
+                        item.firestoreId !==
+                        service.firestoreId &&
+                        (item.name || '')
+                            .trim()
+                            .toLowerCase() ===
+                        serviceName.toLowerCase()
+                );
+
+            if (existingService) {
+
+                alert(
+                    'Já existe outro serviço com esse nome.'
+                );
+
+                return;
+            }
+
+            try {
+
+                await updateDoc(
+                    doc(
+                        db,
+                        'services',
+                        service.firestoreId
+                    ),
+                    {
+                        name: serviceName,
+                        active: serviceActive,
+                        subcategories,
+                        subcategoryStatus,
+                        subcategoryConfig
+                    }
+                );
+
+                await loadServices();
+
+                state.selected = null;
+
+                state.view =
+                    'admin-catalog';
+
+                render();
+
+            } catch (err) {
+
+                console.error(
+                    'Erro ao atualizar serviço:',
+                    err
+                );
+
+                alert(
+                    'Não foi possível salvar as alterações do serviço. ' +
+                    'Verifique o acesso ao Firestore.'
+                );
+            }
+        };
+    }
 
 
     /*
@@ -3823,7 +5131,7 @@ if(adminEditServiceForm){
 
     const ticketForm = $('#ticket-form');
 
-    if(ticketForm){
+    if (ticketForm) {
 
         ticketForm.onsubmit = async e => {
 
@@ -3836,33 +5144,33 @@ if(adminEditServiceForm){
                 $('#subcategory').value;
 
             const selectedService =
-    state.services.find(
-        item =>
-            item.name === service
-    );
+                state.services.find(
+                    item =>
+                        item.name === service
+                );
 
-const config =
-    selectedService
-        ?.subcategoryConfig
-        ?. [subcategory];
+            const config =
+                selectedService
+                    ?.subcategoryConfig
+                ?.[subcategory];
 
-if(!config){
+            if (!config) {
 
-    alert(
-        'A subcategoria selecionada não possui uma configuração válida.'
-    );
+                alert(
+                    'A subcategoria selecionada não possui uma configuração válida.'
+                );
 
-    return;
-}
+                return;
+            }
 
-const type =
-    config.type;
+            const type =
+                config.type;
 
-const criticality =
-    config.criticality;
+            const criticality =
+                config.criticality;
 
-const sla =
-    config.sla;
+            const sla =
+                config.sla;
 
             const list =
                 tickets();
@@ -3873,38 +5181,38 @@ const sla =
                     1000
                 ) + 1;
 
-const ticket = {
+            const ticket = {
 
-    id,
+                id,
 
-    requester:
-        state.user.username,
+                requester:
+                    state.user.username,
 
-    service,
+                service,
 
-    subcategory,
+                subcategory,
 
-    type,
+                type,
 
-    criticality,
+                criticality,
 
-    sla,
+                sla,
 
-    status:
-        'Aberto',
+                status:
+                    'Aberto',
 
-    responsible:
-        null,
+                responsible:
+                    null,
 
-        pendingHistory:
-        [],
+                pendingHistory:
+                    [],
 
-    openedAt:
-        new Date().toISOString(),
+                openedAt:
+                    new Date().toISOString(),
 
-    description:
-        $('#description').value
-};
+                description:
+                    $('#description').value
+            };
 
             try {
 
@@ -3920,7 +5228,7 @@ const ticket = {
 
                 showSuccess(ticket);
 
-            } catch(err) {
+            } catch (err) {
 
                 console.error(
                     'Erro ao criar chamado:',
@@ -3935,10 +5243,294 @@ const ticket = {
         };
     }
 
-       if(
+    /*
+ * Formulário de chamado em nome de solicitante
+ */
+
+    const ticketOnBehalfForm =
+        $('#ticket-on-behalf-form');
+
+
+    if (ticketOnBehalfForm) {
+
+        const submitButton =
+            ticketOnBehalfForm.querySelector(
+                'button[type="submit"]'
+            );
+
+
+        const validateOnBehalfForm =
+            () => {
+
+                const requester =
+                    $('#on-behalf-requester')?.value
+                        .trim();
+
+
+                const service =
+                    $('#on-behalf-service')?.value
+                        .trim();
+
+                const subcategory =
+                    $('#on-behalf-subcategory')?.value
+                        .trim();
+
+                const description =
+                    $('#on-behalf-description')?.value
+                        .trim();
+
+
+                const valid =
+                    Boolean(
+                        requester &&
+                        service &&
+                        subcategory &&
+                        description
+                    );
+
+
+                if (submitButton) {
+
+                    submitButton.disabled =
+                        !valid;
+                }
+
+
+                return valid;
+            };
+
+
+        /*
+         * Atualiza o estado do botão quando
+         * os campos forem alterados.
+         */
+
+        $('#on-behalf-requester-search')?.addEventListener(
+            'input',
+            validateOnBehalfForm
+        );
+
+
+        $('#on-behalf-service')?.addEventListener(
+            'change',
+            validateOnBehalfForm
+        );
+
+
+        $('#on-behalf-subcategory')?.addEventListener(
+            'change',
+            validateOnBehalfForm
+        );
+
+
+        $('#on-behalf-description')?.addEventListener(
+            'input',
+            validateOnBehalfForm
+        );
+
+
+        /*
+         * Criação do chamado.
+         */
+
+        ticketOnBehalfForm.onsubmit =
+            async e => {
+
+                e.preventDefault();
+
+
+                if (!validateOnBehalfForm()) {
+
+                    alert(
+                        'Preencha o solicitante, serviço, subcategoria e descrição.'
+                    );
+
+                    return;
+                }
+
+
+                const requester =
+                    $('#on-behalf-requester')
+                        .value
+                        .trim();
+
+                const requesterUser =
+                    state.users.find(
+                        user =>
+                            user.username === requester ||
+                            user.email === requester
+                    );
+
+                const requesterName =
+                    requesterUser?.name ||
+                    requester;
+
+                const service =
+                    $('#on-behalf-service')
+                        .value
+                        .trim();
+
+                const subcategory =
+                    $('#on-behalf-subcategory')
+                        .value
+                        .trim();
+
+                const description =
+                    $('#on-behalf-description')
+                        .value
+                        .trim();
+
+
+                const selectedService =
+                    state.services.find(
+                        item =>
+                            item.name === service
+                    );
+
+
+                const config =
+                    selectedService
+                        ?.subcategoryConfig
+                    ?.[subcategory];
+
+
+                if (!config) {
+
+                    alert(
+                        'A subcategoria selecionada não possui uma configuração válida.'
+                    );
+
+                    return;
+                }
+
+
+                const type =
+                    config.type ||
+                    'Não configurado';
+
+
+                const criticality =
+                    config.criticality ||
+                    'Não configurada';
+
+
+                const sla =
+                    config.sla || 0;
+
+
+                const list =
+                    tickets();
+
+
+                const id =
+                    Math.max(
+                        ...list.map(
+                            x =>
+                                Number(x.id) || 0
+                        ),
+                        1000
+                    ) + 1;
+
+
+                const ticket = {
+
+                    id,
+
+                    openedBy:
+                        state.user.username,
+
+                    requester,
+
+                    requesterName,
+
+                    service,
+
+                    subcategory,
+
+                    type,
+
+                    criticality,
+
+                    sla,
+
+                    status:
+                        'Aberto',
+
+                    responsible:
+                        null,
+
+                    pendingHistory:
+                        [],
+
+                    openedAt:
+                        new Date().toISOString(),
+
+                    description
+                };
+
+
+                submitButton.disabled =
+                    true;
+
+                submitButton.textContent =
+                    'Criando chamado...';
+
+
+                try {
+
+                    await addDoc(
+                        collection(
+                            db,
+                            'tickets'
+                        ),
+                        ticket
+                    );
+
+
+                    await loadTickets();
+
+                    showSuccess(
+                        ticket,
+                        true
+                    );
+
+
+                } catch (err) {
+
+                    console.error(
+                        'Erro ao criar chamado em nome de solicitante:',
+                        err
+                    );
+
+
+                    submitButton.disabled =
+                        false;
+
+                    submitButton.textContent =
+                        'Criar chamado';
+
+
+                    alert(
+                        'Não foi possível criar o chamado. ' +
+                        'Verifique o acesso ao Firestore.'
+                    );
+                }
+
+            };
+
+
+        /*
+         * Estado inicial do botão.
+         */
+
+        validateOnBehalfForm();
+
+    }
+
+    if (
         $('#service') &&
         $('#subcategory')
-    ){
+    ) {
 
         $('#service').onchange = e => {
 
@@ -3973,290 +5565,1218 @@ const ticket = {
 
             updateForm();
         };
-           
-        if($('#subcategory')){
 
-    $('#subcategory').onchange =
-        updateForm;
-}
-    
+        if ($('#subcategory')) {
+
+            $('#subcategory').onchange =
+                updateForm;
+        }
+
     }
-    
-if($('#resume-pending')){
 
-    $('#resume-pending').onclick =
-        async () => {
+/*
+ * Motor da pesquisa de chamados
+ */
 
-            const t =
-                tickets().find(
-                    x =>
-                        x.id ===
-                        state.selected
+const executeTicketSearch =
+    $('#execute-ticket-search');
+
+if (executeTicketSearch) {
+
+    executeTicketSearch.onclick = () => {
+
+        const normalize = value =>
+    String(value ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+
+        const number =
+            normalize(
+                $('#search-ticket-number')?.value
+            ).replace(/^#/, '');
+
+        const requesterId =
+            $('#search-requester-id')?.value || '';
+
+        const requester =
+            state.users.find(
+                user =>
+                    user.firestoreId === requesterId
+            );
+
+        const responsible =
+            $('#search-responsible')?.value || '';
+
+        const service =
+            $('#search-service')?.value || '';
+
+        const status =
+            $('#search-status')?.value || '';
+
+        const type =
+            $('#search-type')?.value || '';
+
+        const dateStart =
+            $('#search-date-start')?.value || '';
+
+        const dateEnd =
+            $('#search-date-end')?.value || '';
+
+        if (
+            dateStart &&
+            dateEnd &&
+            dateStart > dateEnd
+        ) {
+
+            alert(
+                'A data inicial não pode ser posterior à data final.'
+            );
+
+            return;
+        }
+
+        const requesterValues =
+            requester
+                ? [
+                    requester.username,
+                    requester.email,
+                    requester.name
+                ]
+                    .filter(Boolean)
+                    .map(normalize)
+                : [];
+
+        state.searchResults =
+            state.tickets.filter(ticket => {
+
+                const ticketNumber =
+                    normalize(
+                        numeroChamado(ticket)
+                    ).replace(/^#/, '');
+
+                const ticketId =
+                    normalize(ticket.id);
+
+                const matchesNumber =
+                    !number ||
+                    ticketNumber.includes(number) ||
+                    ticketId === number;
+
+                const ticketRequester =
+                    normalize(ticket.requester);
+
+                const ticketRequesterName =
+                    normalize(ticket.requesterName);
+
+                const matchesRequester =
+                    !requesterId ||
+                    requesterValues.includes(ticketRequester) ||
+                    requesterValues.includes(ticketRequesterName);
+
+                const matchesResponsible =
+                    !responsible ||
+                    ticket.responsible === responsible;
+
+                const matchesService =
+                    !service ||
+                    ticket.service === service;
+
+                const matchesStatus =
+                    !status ||
+                    ticket.status === status;
+
+                const matchesType =
+                    !type ||
+                    ticket.type === type;
+
+                const openedAt =
+                    ticket.openedAt
+                        ? new Date(ticket.openedAt)
+                        : null;
+
+                const startDate =
+                    dateStart
+                        ? new Date(`${dateStart}T00:00:00`)
+                        : null;
+
+                const endDate =
+                    dateEnd
+                        ? new Date(`${dateEnd}T23:59:59.999`)
+                        : null;
+
+                const matchesStartDate =
+                    !startDate ||
+                    (
+                        openedAt &&
+                        openedAt >= startDate
+                    );
+
+                const matchesEndDate =
+                    !endDate ||
+                    (
+                        openedAt &&
+                        openedAt <= endDate
+                    );
+
+                return (
+                    matchesNumber &&
+                    matchesRequester &&
+                    matchesResponsible &&
+                    matchesService &&
+                    matchesStatus &&
+                    matchesType &&
+                    matchesStartDate &&
+                    matchesEndDate
                 );
+            });
 
-            if(!t){
+        const searchResultsContainer =
+    $('#search-results');
 
-                alert(
-                    'Chamado não encontrado.'
-                );
+if (searchResultsContainer) {
 
-                return;
-            }
+    if (!state.searchResults.length) {
 
-            if(
-                t.status !== 'Pendente' ||
-                t.responsible !==
-                    state.user.name
-            ){
+        searchResultsContainer.innerHTML = `
+            <div class="empty">
+                Nenhum chamado encontrado com os filtros informados.
+            </div>
+        `;
 
-                alert(
-                    'Este chamado não está disponível para retomada.'
-                );
+    } else {
 
-                return;
-            }
+        searchResultsContainer.innerHTML = `
+            <p style="margin-bottom:12px">
+                ${state.searchResults.length}
+                chamado(s) encontrado(s).
+            </p>
 
-            const pendingIndex =
-                Array.isArray(
-                    t.pendingHistory
+            ${table(state.searchResults, true)}
+        `;
+
+        searchResultsContainer
+            .querySelectorAll('[data-ticket]')
+            .forEach(button => {
+
+                button.onclick = () => {
+
+                    state.selected =
+                        Number(button.dataset.ticket);
+
+                    state.view = 'detail';
+
+                    render();
+                };
+            });
+    }
+}
+    };
+}
+
+/*
+ * Limpar filtros da pesquisa
+ */
+
+const clearTicketSearch =
+    $('#clear-ticket-search');
+
+if (clearTicketSearch) {
+
+    clearTicketSearch.onclick = () => {
+
+        $('#search-ticket-number').value = '';
+        $('#search-requester').value = '';
+        $('#search-requester-id').value = '';
+        $('#search-responsible').value = '';
+        $('#search-service').value = '';
+        $('#search-status').value = '';
+        $('#search-type').value = '';
+        $('#search-date-start').value = '';
+        $('#search-date-end').value = '';
+
+        $('#search-requester-results').innerHTML = '';
+        $('#search-requester-results').style.display = 'none';
+
+        state.searchResults = [];
+
+        const resultsContainer =
+            $('#search-results');
+
+        if (resultsContainer) {
+
+            resultsContainer.innerHTML = `
+                <div class="empty">
+                    Utilize os filtros acima para pesquisar chamados.
+                </div>
+            `;
+        }
+    };
+}
+
+    /*
+ * Autocomplete do solicitante na pesquisa
+ */
+
+const searchRequesterInput =
+    $('#search-requester');
+
+const searchRequesterResults =
+    $('#search-requester-results');
+
+const searchRequesterId =
+    $('#search-requester-id');
+
+if (
+    searchRequesterInput &&
+    searchRequesterResults &&
+    searchRequesterId
+) {
+
+    const normalizeSearchRequester =
+        value =>
+            (value || '')
+                .normalize('NFD')
+                .replace(
+                    /[\u0300-\u036f]/g,
+                    ''
                 )
-                    ? t.pendingHistory
-                        .map(
-                            (item, index) => ({
-                                item,
-                                index
-                            })
-                        )
-                        .reverse()
-                        .find(
-                            x =>
-                                !x.item.endedAt
-                        )
-                    : null;
+                .toLowerCase()
+                .trim();
 
-            if(!pendingIndex){
+    searchRequesterInput.oninput = () => {
 
-                alert(
-                    'Não foi encontrada uma pendência ativa para este chamado.'
+        const search =
+            normalizeSearchRequester(
+                searchRequesterInput.value
+            );
+
+        searchRequesterId.value = '';
+
+        if (!search) {
+
+            searchRequesterResults.innerHTML = '';
+            searchRequesterResults.style.display = 'none';
+
+            return;
+        }
+
+        const users =
+            state.users
+                .filter(
+                    user =>
+                        user.role === 'requester'
+                )
+                .filter(
+                    user => {
+
+                        const name =
+                            normalizeSearchRequester(
+                                user.name
+                            );
+
+                        const username =
+                            normalizeSearchRequester(
+                                user.username
+                            );
+
+                        const email =
+                            normalizeSearchRequester(
+                                user.email
+                            );
+
+                        return (
+                            name.includes(search) ||
+                            username.includes(search) ||
+                            email.includes(search)
+                        );
+                    }
+                )
+                .sort(
+                    (a, b) =>
+                        (a.name || '').localeCompare(
+                            b.name || '',
+                            'pt-BR'
+                        )
+                )
+                .slice(0, 8);
+
+        if (!users.length) {
+
+            searchRequesterResults.innerHTML = `
+                <div style="padding:12px;color:#667085">
+                    Nenhum solicitante encontrado.
+                </div>
+            `;
+
+            searchRequesterResults.style.display = 'block';
+
+            return;
+        }
+
+        searchRequesterResults.innerHTML =
+            users
+                .map(
+                    user => `
+                        <button
+                            type="button"
+                            data-search-requester-id="${user.firestoreId}"
+                            style="
+                                display:block;
+                                width:100%;
+                                padding:10px 12px;
+                                border:0;
+                                border-bottom:1px solid #edf1f5;
+                                background:#fff;
+                                text-align:left;
+                                cursor:pointer;
+                            "
+                        >
+                            <strong>
+                                ${user.name || 'Nome não informado'}
+                            </strong>
+
+                            <br>
+
+                            <small>
+                                ${user.username || user.email || ''}
+                                —
+                                ${user.active === false ? 'Inativo' : 'Ativo'}
+                            </small>
+                        </button>
+                    `
+                )
+                .join('');
+
+        searchRequesterResults.style.display = 'block';
+
+        searchRequesterResults
+            .querySelectorAll('[data-search-requester-id]')
+            .forEach(
+                button => {
+
+                    button.onclick = () => {
+
+                        const firestoreId =
+                            button.dataset.searchRequesterId;
+
+                        const user =
+                            state.users.find(
+                                item =>
+                                    item.firestoreId === firestoreId
+                            );
+
+                        if (!user) {
+                            return;
+                        }
+
+                        searchRequesterId.value =
+                            user.firestoreId;
+
+                        searchRequesterInput.value =
+                            user.name || user.username || user.email;
+
+                        searchRequesterResults.innerHTML = '';
+                        searchRequesterResults.style.display = 'none';
+                    };
+                }
+            );
+    };
+}
+
+/*
+ * Filtro de técnico responsável na pesquisa
+ */
+
+const searchResponsible =
+    $('#search-responsible');
+
+if (searchResponsible) {
+
+    const selectedResponsible =
+        searchResponsible.value;
+
+    const responsibleNames =
+        [
+            ...new Set(
+                state.tickets
+                    .map(
+                        ticket =>
+                            ticket.responsible
+                    )
+                    .filter(Boolean)
+            )
+        ]
+        .sort(
+            (a, b) =>
+                a.localeCompare(
+                    b,
+                    'pt-BR'
+                )
+        );
+
+    searchResponsible.innerHTML = `
+        <option value="">
+            Todos
+        </option>
+    `;
+
+    responsibleNames.forEach(
+        name => {
+
+            const option =
+                document.createElement('option');
+
+            option.value = name;
+            option.textContent = name;
+
+            searchResponsible.appendChild(
+                option
+            );
+        }
+    );
+
+    if (
+        responsibleNames.includes(
+            selectedResponsible
+        )
+    ) {
+        searchResponsible.value =
+            selectedResponsible;
+    }
+}
+
+/*
+ * Filtro de serviço na pesquisa
+ */
+
+const searchService =
+    $('#search-service');
+
+if (searchService) {
+
+    const selectedService =
+        searchService.value;
+
+    const serviceNames =
+        [
+            ...new Set(
+                state.tickets
+                    .map(
+                        ticket =>
+                            ticket.service
+                    )
+                    .filter(Boolean)
+            )
+        ]
+        .sort(
+            (a, b) =>
+                a.localeCompare(
+                    b,
+                    'pt-BR'
+                )
+        );
+
+    searchService.innerHTML = `
+        <option value="">
+            Todos
+        </option>
+    `;
+
+    serviceNames.forEach(
+        name => {
+
+            const option =
+                document.createElement('option');
+
+            option.value = name;
+            option.textContent = name;
+
+            searchService.appendChild(
+                option
+            );
+        }
+    );
+
+    if (
+        serviceNames.includes(
+            selectedService
+        )
+    ) {
+        searchService.value =
+            selectedService;
+    }
+}
+
+
+
+    /*
+     * Autocomplete do solicitante
+     */
+
+    const requesterSearch =
+        $('#on-behalf-requester-search');
+
+    const requesterResults =
+        $('#on-behalf-requester-results');
+
+    const requesterHidden =
+        $('#on-behalf-requester');
+
+    const requesterSelected =
+        $('#on-behalf-requester-selected');
+
+
+    if (
+        requesterSearch &&
+        requesterResults &&
+        requesterHidden
+    ) {
+
+        const normalizeText =
+            value =>
+                (value || '')
+                    .normalize('NFD')
+                    .replace(
+                        /[\u0300-\u036f]/g,
+                        ''
+                    )
+                    .toLowerCase()
+                    .trim();
+
+
+        const getRequesterIdentifier =
+            user =>
+                user.username ||
+                user.email ||
+                '';
+
+
+        requesterSearch.oninput = () => {
+
+            const search =
+                normalizeText(
+                    requesterSearch.value
                 );
+
+
+            /*
+             * Ao alterar o texto,
+             * desfazemos uma seleção anterior.
+             */
+
+            requesterHidden.value = '';
+
+
+            if (requesterSelected) {
+
+                requesterSelected.style.display =
+                    'none';
+
+                requesterSelected.innerHTML =
+                    '';
+            }
+
+
+            if (!search) {
+
+                requesterResults.innerHTML =
+                    '';
+
+                requesterResults.style.display =
+                    'none';
 
                 return;
             }
 
-            const now =
-                new Date();
 
-            const startedAt =
-                new Date(
-                    pendingIndex.item.startedAt
-                );
-
-            const totalMinutes =
-                Math.max(
-                    0,
-                    Math.round(
-                        (
-                            now.getTime() -
-                            startedAt.getTime()
-                        ) / 60000
+            const users =
+                state.users
+                    .filter(
+                        user =>
+                            user.role === 'requester' &&
+                            user.active !== false
                     )
+                    .filter(
+                        user => {
+
+                            const name =
+                                normalizeText(
+                                    user.name
+                                );
+
+                            const email =
+                                normalizeText(
+                                    user.email
+                                );
+
+                            const username =
+                                normalizeText(
+                                    user.username
+                                );
+
+                            return (
+                                name.includes(search) ||
+                                email.includes(search) ||
+                                username.includes(search)
+                            );
+                        }
+                    )
+                    .sort(
+                        (a, b) =>
+                            (a.name || '')
+                                .localeCompare(
+                                    b.name || '',
+                                    'pt-BR'
+                                )
+                    )
+                    .slice(0, 8);
+
+
+            if (!users.length) {
+
+                requesterResults.innerHTML = `
+                <div
+                    style="
+                        padding:12px;
+                        color:#667085;
+                    "
+                >
+                    Nenhum solicitante encontrado.
+                </div>
+            `;
+
+                requesterResults.style.display =
+                    'block';
+
+                return;
+            }
+
+
+            requesterResults.innerHTML =
+                users
+                    .map(
+                        user => {
+
+                            const identifier =
+                                getRequesterIdentifier(
+                                    user
+                                );
+
+                            return `
+                            <button
+                                type="button"
+                                data-requester-id="${user.firestoreId}"
+                                style="
+                                    display:block;
+                                    width:100%;
+                                    padding:10px 12px;
+                                    border:0;
+                                    border-bottom:1px solid #edf1f5;
+                                    background:#fff;
+                                    text-align:left;
+                                    cursor:pointer;
+                                "
+                            >
+
+                                <strong>
+                                    ${user.name || 'Nome não informado'}
+                                </strong>
+
+                                <br>
+
+                                <small>
+                                    ${identifier}
+                                </small>
+
+                            </button>
+                        `;
+                        }
+                    )
+                    .join('');
+
+
+            requesterResults.style.display =
+                'block';
+
+
+            requesterResults
+                .querySelectorAll(
+                    '[data-requester-id]'
+                )
+                .forEach(
+                    button => {
+
+                        button.onclick = () => {
+
+                            const firestoreId =
+                                button.dataset
+                                    .requesterId;
+
+
+                            const user =
+                                state.users.find(
+                                    item =>
+                                        item.firestoreId ===
+                                        firestoreId
+                                );
+
+
+                            if (!user) {
+
+                                console.error(
+                                    'Solicitante não encontrado:',
+                                    firestoreId
+                                );
+
+                                return;
+                            }
+
+
+                            const identifier =
+                                getRequesterIdentifier(
+                                    user
+                                );
+
+
+                            /*
+                             * Guarda o identificador que será
+                             * utilizado posteriormente no chamado.
+                             */
+
+                            requesterHidden.value =
+                                identifier;
+
+
+                            /*
+                             * Mostra o nome selecionado
+                             * no campo de pesquisa.
+                             */
+
+                            requesterSearch.value =
+                                user.name || identifier;
+
+
+                            /*
+                             * Fecha a lista de sugestões.
+                             */
+
+                            requesterResults.innerHTML =
+                                '';
+
+                            requesterResults.style.display =
+                                'none';
+
+
+                            /*
+                             * Mostra claramente quem foi selecionado.
+                             */
+
+                            if (requesterSelected) {
+
+                                requesterSelected.innerHTML = `
+                                <strong>
+                                    Solicitante selecionado:
+                                </strong>
+
+                                ${user.name || 'Nome não informado'}
+
+                                —
+                                ${identifier}
+                            `;
+
+                                requesterSelected.style.display =
+                                    'block';
+                            }
+
+                        };
+
+                    }
                 );
 
-            const limit =
-                deadline(t);
+        };
 
-            let slaRemainingMinutes =
-                null;
+    }
 
-            if(limit){
+    /*
+ * Formulário de chamado em nome de solicitante
+ */
 
-                const current =
-                    new Date(
-                        startedAt
+    const onBehalfService =
+        $('#on-behalf-service');
+
+    const onBehalfSubcategory =
+        $('#on-behalf-subcategory');
+
+    if (
+        onBehalfService &&
+        onBehalfSubcategory
+    ) {
+
+        onBehalfService.onchange = e => {
+
+            const service =
+                state.services.find(
+                    item =>
+                        item.name ===
+                        e.target.value
+                );
+
+            const subs =
+                service?.subcategories || [];
+
+            const activeSubs =
+                subs.filter(
+                    subcategory =>
+                        service.subcategoryStatus?.[subcategory] !== false
+                );
+
+            onBehalfSubcategory.disabled =
+                !activeSubs.length;
+
+            onBehalfSubcategory.innerHTML =
+                '<option value="">Selecione uma subcategoria</option>' +
+
+                activeSubs
+                    .map(
+                        subcategory =>
+                            `<option value="${subcategory}">
+                            ${subcategory}
+                        </option>`
+                    )
+                    .join('');
+
+            $('#on-behalf-type').value =
+                'Será definido automaticamente';
+
+            $('#on-behalf-criticality').value =
+                'Será definida automaticamente';
+
+            $('#on-behalf-sla').value =
+                'Será definido automaticamente';
+        };
+
+
+        onBehalfSubcategory.onchange = e => {
+
+            const service =
+                state.services.find(
+                    item =>
+                        item.name ===
+                        onBehalfService.value
+                );
+
+            const config =
+                service
+                    ?.subcategoryConfig
+                ?.[e.target.value];
+
+            if (!config) {
+
+                $('#on-behalf-type').value =
+                    'Não configurado';
+
+                $('#on-behalf-criticality').value =
+                    'Não configurada';
+
+                $('#on-behalf-sla').value =
+                    'Não configurado';
+
+                return;
+            }
+
+            $('#on-behalf-type').value =
+                config.type ||
+                'Não configurado';
+
+            $('#on-behalf-criticality').value =
+                config.criticality ||
+                'Não configurada';
+
+            $('#on-behalf-sla').value =
+                config.sla
+                    ? `${config.sla} horas`
+                    : 'Não configurado';
+        };
+
+    }
+
+    if ($('#resume-pending')) {
+
+        $('#resume-pending').onclick =
+            async () => {
+
+                const t =
+                    tickets().find(
+                        x =>
+                            x.id ===
+                            state.selected
                     );
 
-                let minutes = 0;
+                if (!t) {
 
-                while(
-                    current < limit
-                ){
-
-                    const day =
-                        current.getDay();
-
-                    const hour =
-                        current.getHours();
-
-                    if(
-                        day >= 1 &&
-                        day <= 5 &&
-                        hour >= 8 &&
-                        hour < 18
-                    ){
-
-                        minutes++;
-                    }
-
-                    current.setMinutes(
-                        current.getMinutes() + 1
+                    alert(
+                        'Chamado não encontrado.'
                     );
+
+                    return;
                 }
 
-                slaRemainingMinutes =
+                if (
+                    t.status !== 'Pendente' ||
+                    t.responsible !==
+                    state.user.name
+                ) {
+
+                    alert(
+                        'Este chamado não está disponível para retomada.'
+                    );
+
+                    return;
+                }
+
+                const pendingIndex =
+                    Array.isArray(
+                        t.pendingHistory
+                    )
+                        ? t.pendingHistory
+                            .map(
+                                (item, index) => ({
+                                    item,
+                                    index
+                                })
+                            )
+                            .reverse()
+                            .find(
+                                x =>
+                                    !x.item.endedAt
+                            )
+                        : null;
+
+                if (!pendingIndex) {
+
+                    alert(
+                        'Não foi encontrada uma pendência ativa para este chamado.'
+                    );
+
+                    return;
+                }
+
+                const now =
+                    new Date();
+
+                const startedAt =
+                    new Date(
+                        pendingIndex.item.startedAt
+                    );
+
+                const totalMinutes =
                     Math.max(
                         0,
-                        minutes
+                        Math.round(
+                            (
+                                now.getTime() -
+                                startedAt.getTime()
+                            ) / 60000
+                        )
                     );
+
+                const limit =
+                    deadline(t);
+
+                let slaRemainingMinutes =
+                    null;
+
+                if (limit) {
+
+                    const current =
+                        new Date(
+                            startedAt
+                        );
+
+                    let minutes = 0;
+
+                    while (
+                        current < limit
+                    ) {
+
+                        const day =
+                            current.getDay();
+
+                        const hour =
+                            current.getHours();
+
+                        if (
+                            day >= 1 &&
+                            day <= 5 &&
+                            hour >= 8 &&
+                            hour < 18
+                        ) {
+
+                            minutes++;
+                        }
+
+                        current.setMinutes(
+                            current.getMinutes() + 1
+                        );
+                    }
+
+                    slaRemainingMinutes =
+                        Math.max(
+                            0,
+                            minutes
+                        );
+                }
+
+                const pendingHistory =
+                    [...t.pendingHistory];
+
+                pendingHistory[
+                    pendingIndex.index
+                ] = {
+
+                    ...pendingHistory[
+                    pendingIndex.index
+                    ],
+
+                    endedAt:
+                        now.toISOString(),
+
+                    totalMinutes,
+
+                    usefulMinutes:
+                        0,
+
+                    resumedBy:
+                        state.user.name
+                };
+
+                const button =
+                    $('#resume-pending');
+
+                button.disabled =
+                    true;
+
+                button.textContent =
+                    'Retomando...';
+
+                try {
+
+                    await updateDoc(
+                        doc(
+                            db,
+                            'tickets',
+                            t.firestoreId
+                        ),
+                        {
+
+                            status:
+                                'Em análise',
+
+                            pendingHistory,
+
+                            slaRemainingMinutes,
+
+                            slaResumeAt:
+                                now.toISOString()
+                        }
+                    );
+
+                    await loadTickets();
+
+                    render();
+
+                } catch (err) {
+
+                    console.error(
+                        'Erro ao retomar chamado:',
+                        err
+                    );
+
+                    button.disabled =
+                        false;
+
+                    button.textContent =
+                        'Retomar atendimento';
+
+                    alert(
+                        'Não foi possível retomar o chamado. ' +
+                        'Verifique o acesso ao Firestore.'
+                    );
+                }
+            };
+    }
+
+    if ($('#finish')) {
+        $('#finish').onclick = async () => {
+            const t = tickets().find(x => x.id === state.selected);
+
+            if (!t) {
+                alert('Chamado não encontrado.');
+                return;
             }
 
-            const pendingHistory =
-                [...t.pendingHistory];
+            const solution = $('#solution')?.value.trim() || '';
 
-            pendingHistory[
-                pendingIndex.index
-            ] = {
+            if (!solution) {
+                alert('Informe a solução/procedimento realizado antes de concluir o chamado.');
+                $('#solution')?.focus();
+                return;
+            }
 
-                ...pendingHistory[
-                    pendingIndex.index
-                ],
+            if (solution.length < 15) {
+                alert('A descrição da solução deve ter no mínimo 15 caracteres.');
+                $('#solution')?.focus();
+                return;
+            }
 
-                endedAt:
-                    now.toISOString(),
+            const button = $('#finish');
 
-                totalMinutes,
+            button.disabled = true;
+            button.textContent = 'Concluindo...';
 
-                usefulMinutes:
-                    0,
-
-                resumedBy:
-                    state.user.name
-            };
-
-            const button =
-                $('#resume-pending');
-
-            button.disabled =
-                true;
-
-            button.textContent =
-                'Retomando...';
-
-            try{
-
+            try {
                 await updateDoc(
-                    doc(
-                        db,
-                        'tickets',
-                        t.firestoreId
-                    ),
+                    doc(db, 'tickets', t.firestoreId),
                     {
-
-                        status:
-                            'Em análise',
-
-                        pendingHistory,
-
-                        slaRemainingMinutes,
-
-                        slaResumeAt:
-                            now.toISOString()
+                        solution,
+                        status: 'Concluído',
+                        closedAt: new Date().toISOString()
                     }
                 );
 
                 await loadTickets();
 
+                state.selected = null;
+                state.view = 'queue';
+
                 render();
 
-            }catch(err){
+            } catch (err) {
+                console.error('Erro ao concluir chamado:', err);
 
-                console.error(
-                    'Erro ao retomar chamado:',
-                    err
-                );
-
-                button.disabled =
-                    false;
-
-                button.textContent =
-                    'Retomar atendimento';
+                button.disabled = false;
+                button.textContent = 'Concluir chamado';
 
                 alert(
-                    'Não foi possível retomar o chamado. ' +
+                    'Não foi possível concluir o chamado. ' +
                     'Verifique o acesso ao Firestore.'
                 );
             }
         };
-}
-
-    if($('#finish')){
-  $('#finish').onclick = async () => {
-    const t = tickets().find(x => x.id === state.selected);
-
-    if(!t){
-      alert('Chamado não encontrado.');
-      return;
     }
+    if ($('#pending')) {
 
-    const solution = $('#solution')?.value.trim() || '';
+        $('#pending').onclick = () => {
 
-    if(!solution){
-      alert('Informe a solução/procedimento realizado antes de concluir o chamado.');
-      $('#solution')?.focus();
-      return;
-    }
+            const modal =
+                document.createElement('div');
 
-    if(solution.length < 15){
-      alert('A descrição da solução deve ter no mínimo 15 caracteres.');
-      $('#solution')?.focus();
-      return;
-    }
+            modal.className =
+                'modal';
 
-    const button = $('#finish');
-
-    button.disabled = true;
-    button.textContent = 'Concluindo...';
-
-    try{
-      await updateDoc(
-        doc(db, 'tickets', t.firestoreId),
-        {
-          solution,
-          status: 'Concluído',
-          closedAt: new Date().toISOString()
-        }
-      );
-
-      await loadTickets();
-
-      state.selected = null;
-      state.view = 'queue';
-
-      render();
-
-    } catch(err){
-      console.error('Erro ao concluir chamado:', err);
-
-      button.disabled = false;
-      button.textContent = 'Concluir chamado';
-
-      alert(
-        'Não foi possível concluir o chamado. ' +
-        'Verifique o acesso ao Firestore.'
-      );
-    }
-  };
-    }
-if($('#pending')){
-
-    $('#pending').onclick = () => {
-
-        const modal =
-            document.createElement('div');
-
-        modal.className =
-            'modal';
-
-        modal.innerHTML = `
+            modal.innerHTML = `
             <div class="modal-box">
 
                 <h2>
@@ -4335,145 +6855,159 @@ if($('#pending')){
             </div>
         `;
 
-        document.body.append(
-            modal
-        );
+            document.body.append(
+                modal
+            );
 
-        $('#pending-reason').onchange = e => {
+            $('#pending-reason').onchange = e => {
 
-            const container =
-                $('#pending-description-container');
+                const container =
+                    $('#pending-description-container');
 
-            if(
-                e.target.value === 'Outro'
-            ){
+                if (
+                    e.target.value === 'Outro'
+                ) {
 
-                container.style.display =
-                    'block';
+                    container.style.display =
+                        'block';
 
-            }else{
+                } else {
 
-                container.style.display =
-                    'none';
+                    container.style.display =
+                        'none';
 
-                $('#pending-description').value =
-                    '';
-            }
-        };
-
-        $('#cancel-pending').onclick = () => {
-
-            modal.remove();
-
-        };
-
-        $('#confirm-pending').onclick =
-            async () => {
-
-                const reason =
-                    $('#pending-reason').value;
-
-                if(!reason){
-
-                    alert(
-                        'Selecione o motivo da pendência.'
-                    );
-
-                    $('#pending-reason').focus();
-
-                    return;
-                }
-
-                const description =
-                    reason === 'Outro'
-                        ? $('#pending-description')
-                            .value
-                            .trim()
-                        : '';
-
-                if(
-                    reason === 'Outro' &&
-                    !description
-                ){
-
-                    alert(
-                        'Descreva o motivo da pendência.'
-                    );
-
-                    $('#pending-description')
-                        .focus();
-
-                    return;
-                }
-
-                const t =
-                    tickets().find(
-                        x =>
-                            x.id ===
-                            state.selected
-                    );
-
-                if(!t){
-
-                    alert(
-                        'Chamado não encontrado.'
-                    );
-
-                    modal.remove();
-
-                    return;
-                }
-
-                const pending =
-                    criarRegistroPendencia(
-                        reason,
-                        description,
-                        state.user.name
-                    );
-
-                try{
-
-                    await updateDoc(
-                        doc(
-                            db,
-                            'tickets',
-                            t.firestoreId
-                        ),
-                        {
-                            status:
-                                'Pendente',
-
-                            pendingHistory: [
-                                ...(t.pendingHistory || []),
-                                pending
-                            ]
-                        }
-                    );
-
-                    await loadTickets();
-
-                    modal.remove();
-
-                    render();
-
-                }catch(err){
-
-                    console.error(
-                        'Erro ao colocar chamado em Pendente:',
-                        err
-                    );
-
-                    alert(
-                        'Não foi possível colocar o chamado em Pendente. ' +
-                        'Verifique o acesso ao Firestore.'
-                    );
+                    $('#pending-description').value =
+                        '';
                 }
             };
-    };
-}
+
+            $('#cancel-pending').onclick = () => {
+
+                modal.remove();
+
+            };
+
+            $('#confirm-pending').onclick =
+                async () => {
+
+                    const reason =
+                        $('#pending-reason').value;
+
+                    if (!reason) {
+
+                        alert(
+                            'Selecione o motivo da pendência.'
+                        );
+
+                        $('#pending-reason').focus();
+
+                        return;
+                    }
+
+                    const description =
+                        reason === 'Outro'
+                            ? $('#pending-description')
+                                .value
+                                .trim()
+                            : '';
+
+                    if (
+                        reason === 'Outro' &&
+                        !description
+                    ) {
+
+                        alert(
+                            'Descreva o motivo da pendência.'
+                        );
+
+                        $('#pending-description')
+                            .focus();
+
+                        return;
+                    }
+
+                    const t =
+                        tickets().find(
+                            x =>
+                                x.id ===
+                                state.selected
+                        );
+
+                    if (!t) {
+
+                        alert(
+                            'Chamado não encontrado.'
+                        );
+
+                        modal.remove();
+
+                        return;
+                    }
+
+                    const pending =
+                        criarRegistroPendencia(
+                            reason,
+                            description,
+                            state.user.name
+                        );
+
+                    try {
+
+                        await updateDoc(
+                            doc(
+                                db,
+                                'tickets',
+                                t.firestoreId
+                            ),
+                            {
+                                status:
+                                    'Pendente',
+
+                                pendingHistory: [
+                                    ...(t.pendingHistory || []),
+                                    pending
+                                ]
+                            }
+                        );
+
+                        await loadTickets();
+
+                        modal.remove();
+
+                        render();
+
+                    } catch (err) {
+
+                        console.error(
+                            'Erro ao colocar chamado em Pendente:',
+                            err
+                        );
+
+                        alert(
+                            'Não foi possível colocar o chamado em Pendente. ' +
+                            'Verifique o acesso ao Firestore.'
+                        );
+                    }
+                };
+        };
+    }
 
 }
-function showSuccess(t){
+
+function numeroChamado(t) {
+
+    const ano =
+        t?.openedAt
+            ? new Date(t.openedAt).getFullYear()
+            : new Date().getFullYear();
+
+    return `#${ano}-${t.id}`;
+}
+
+function showSuccess(
+    t,
+    onBehalf = false
+) {
 
     const modal =
         document.createElement('div');
@@ -4489,8 +7023,31 @@ function showSuccess(t){
             </h2>
 
             <p class="number">
-                #2026-${t.id}
-            </p>
+    ${numeroChamado(t)}
+</p>
+
+            ${onBehalf
+            ? `
+            <div class="message">
+                
+                <strong>
+                    Abertura em nome de:
+                </strong>
+
+                ${t.requester}
+
+                <br>
+
+                <strong>
+                    Aberto por:
+                </strong>
+
+                ${t.openedBy}
+                
+            </div>
+        `
+            : ''
+        }
 
             <div class="confirm-list">
 
@@ -4525,11 +7082,14 @@ function showSuccess(t){
             <div class="actions">
 
                 <button
-                    class="primary"
-                    id="go-mine"
-                >
-                    Ver meus chamados
-                </button>
+    class="primary"
+    id="go-mine"
+>
+    ${onBehalf
+            ? 'Ir para a fila de chamados'
+            : 'Ver meus chamados'
+        }
+</button>
 
             </div>
 
@@ -4545,15 +7105,20 @@ function showSuccess(t){
         modal.remove();
 
         state.view =
-            'mine';
+            onBehalf
+                ? 'queue'
+                : 'mine';
+
+        state.selected =
+            null;
 
         render();
     };
 }
-window.localTicketApi={createTicket(payload){const list=tickets(),id=Math.max(...list.map(x=>x.id),1000)+1;const type=payload.type||typeFor(payload.subcategory),priority=payload.priority||'Média';const ticket={id,status:'Aberto',responsible:null,openedAt:new Date().toISOString(),sla:slas[type][priority],...payload,type,priority};list.push(ticket);save(list);return ticket},getTickets(){return tickets()}};
+window.localTicketApi = { createTicket(payload) { const list = tickets(), id = Math.max(...list.map(x => x.id), 1000) + 1; const type = payload.type || typeFor(payload.subcategory), priority = payload.priority || 'Média'; const ticket = { id, status: 'Aberto', responsible: null, openedAt: new Date().toISOString(), sla: slas[type][priority], ...payload, type, priority }; list.push(ticket); save(list); return ticket }, getTickets() { return tickets() } };
 onAuthStateChanged(auth, async user => {
 
-    if(!user){
+    if (!user) {
 
         state.user = null;
         state.view = 'new';
@@ -4568,64 +7133,64 @@ onAuthStateChanged(auth, async user => {
         const userRef = doc(db, 'users', user.uid);
         const userSnap = await getDoc(userRef);
 
-  if(!userSnap.exists()){
+        if (!userSnap.exists()) {
 
-    console.warn(
-        'Perfil ainda não disponível no Firestore. Aguardando sincronização...'
-    );
+            console.warn(
+                'Perfil ainda não disponível no Firestore. Aguardando sincronização...'
+            );
 
-    await new Promise(
-        resolve => setTimeout(resolve, 1000)
-    );
+            await new Promise(
+                resolve => setTimeout(resolve, 1000)
+            );
 
-    const retrySnap = await getDoc(userRef);
+            const retrySnap = await getDoc(userRef);
 
-    if(!retrySnap.exists()){
+            if (!retrySnap.exists()) {
 
-        console.error(
-            'Usuário autenticado, mas sem perfil no Firestore:',
-            user.uid
-        );
+                console.error(
+                    'Usuário autenticado, mas sem perfil no Firestore:',
+                    user.uid
+                );
 
-        state.user = null;
+                state.user = null;
 
-        render();
+                render();
 
-        $('#login-error').innerHTML = `
+                $('#login-error').innerHTML = `
             <div class="message error">
                 Seu usuário foi autenticado, mas ainda não possui
                 um perfil cadastrado no sistema.
             </div>
         `;
 
-        await signOut(auth);
+                await signOut(auth);
 
-        return;
-    }
+                return;
+            }
 
-    userSnap = retrySnap;
-}
+            userSnap = retrySnap;
+        }
 
         const profile = userSnap.data();
 
-        if(profile.active === false){
+        if (profile.active === false) {
 
-    await signOut(auth);
+            await signOut(auth);
 
-    state.user = null;
-    state.view = 'new';
-    state.selected = null;
+            state.user = null;
+            state.view = 'new';
+            state.selected = null;
 
-    render();
+            render();
 
-    $('#login-error').innerHTML = `
+            $('#login-error').innerHTML = `
         <div class="message error">
             Seu acesso ao Portal está inativo.
         </div>
     `;
 
-    return;
-}
+            return;
+        }
 
         state.user = {
             id: user.uid,
@@ -4637,25 +7202,25 @@ onAuthStateChanged(auth, async user => {
             department: profile.department || 'Não definido'
         };
 
-        if(state.user.role === 'admin'){
+        if (state.user.role === 'admin') {
 
-    state.view = 'admin';
+            state.view = 'admin';
 
-}else if(state.user.role === 'technician'){
+        } else if (state.user.role === 'technician') {
 
-    state.view = 'queue';
+            state.view = 'queue';
 
-}else{
+        } else {
 
-    state.view = 'new';
-}
+            state.view = 'new';
+        }
 
-                await loadTickets();
-                await loadServices();
+        await loadTickets();
+        await loadServices();
 
         render();
 
-    } catch(err) {
+    } catch (err) {
 
         console.error(
             'Erro ao carregar perfil do usuário:',
