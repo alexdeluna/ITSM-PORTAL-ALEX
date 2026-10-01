@@ -18,7 +18,9 @@ import {
     getDocs,
     addDoc,
     updateDoc,
-    setDoc
+    setDoc,
+    query,
+    where
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 import { firebaseConfig } from "./firebase-config.js";
@@ -46,5 +48,7 @@ export {
     createUserWithEmailAndPassword,
     signInWithPopup,
     onAuthStateChanged,
-    signOut
+    signOut,
+    query,
+    where,
 };
