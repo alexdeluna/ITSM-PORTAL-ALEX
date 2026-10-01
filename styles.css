@@ -188,8 +188,10 @@ button {
 
 .main {
     flex: 1;
-    padding: 34px;
-    max-width: 1320px;
+    min-width: 0;
+    width: 100%;
+    padding: 28px;
+    max-width: none;
 }
 
 /* =========================
