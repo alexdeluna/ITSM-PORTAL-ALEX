@@ -61,8 +61,12 @@ let state = {
 
     minePage: 1,
     minePageSize: 25,
+
     queuePage: 1,
-    queuePageSize: 25
+    queuePageSize: 25,
+
+    reportPage: 1,
+    reportPageSize: 25
 };
 const $ = s => document.querySelector(s); const pad = n => String(n).padStart(2, '0');
 async function loadTickets() {
@@ -929,6 +933,13 @@ function shell(content) {
         </button>
 
         <button
+    class="nav ${state.view === 'admin-reports' ? 'active' : ''}"
+    data-view="admin-reports"
+>
+    Relatórios Gerenciais
+</button>
+
+        <button
             class="nav ${state.view === 'queue' ? 'active' : ''}"
             data-view="queue"
         >
@@ -1622,7 +1633,12 @@ function table(list, tech) {
 </td>
 
 <td>
-    ${t.openedBy || '<span class="muted">Não informado</span>'}
+    ${!t.openedBy
+        ? '<span class="muted">Não informado</span>'
+        : t.openedBy === t.requester
+            ? 'Próprio solicitante'
+            : t.openedBy
+    }
 </td>
 
 <td>
@@ -2214,6 +2230,8 @@ function adminPage() {
                 <button class="secondary" data-admin="catalog">
                     Central de Serviços
                 </button>
+
+             
             </div>
         </section>
     `);
@@ -3370,59 +3388,14 @@ function detail() {
 
             </div>
 
-            ${canFinish || canPending || canResume ? `
-                <div
-                    style="
-                        display:flex;
-                        flex-direction:column;
-                        gap:10px;
-                        min-width:320px;
-                    "
-                >
-
-                    <label for="solution">
-                        Solução / procedimento realizado
-                    </label>
-
-                    <textarea id="solution" rows="4" minlength="15"
-                        placeholder="Descreva o que foi feito para resolver o chamado..."
-                    >${t.solution || ''}</textarea>
-
-                    
-
-                    ${canPending ? `
-    <button
-        class="secondary"
-        id="pending"
-        type="button"
-    >
-        Colocar em Pendente
-    </button>
-` : ''}
-
-${canResume ? `
-    <button
-        class="primary"
-        id="resume-pending"
-        type="button"
-    >
-        Retomar atendimento
-    </button>
-` : ''}
-
-                    <button
-                        class="primary"
-                        id="finish"
-                    >
-                        Concluir chamado
-                    </button>
-
-                </div>
-            ` : ''}
+            
 
         </div>
 
         <section class="card">
+
+        <div class="detail-layout">
+    <div class="detail-content">
 
             <div class="detail-grid">
 
@@ -3505,21 +3478,13 @@ ${t.openedBy
                 Descrição
             </label>
 
-            <p>
+                        <p>
                 ${t.description}
             </p>
 
-            ${t.solution ? `
-                <label>
-                    Solução / procedimento realizado
-                </label>
+        
 
-                <p>
-                    ${t.solution}
-                </p>
-            ` : ''}
-
-            <h3>
+        <h3>
                 Andamento
             </h3>
 
@@ -3604,11 +3569,728 @@ ${t.openedBy
                     </div>
                 ` : ''}
 
+                </div>
+                </div>
+
+        <div class="detail-actions">
+
+        
+
+                    ${canFinish || canPending || canResume ? `
+                <div class="detail-action-form">
+
+                    <label for="solution">
+                        Solução / procedimento realizado
+                    </label>
+
+                    <textarea id="solution" rows="4" minlength="15"
+                        placeholder="Descreva o que foi feito para resolver o chamado..."
+                    >${t.solution || ''}</textarea>
+
+                    ${canPending ? `
+                        <button
+                            class="secondary"
+                            id="pending"
+                            type="button"
+                        >
+                            Colocar em Pendente
+                        </button>
+                    ` : ''}
+
+                    ${canResume ? `
+                        <button
+                            class="primary"
+                            id="resume-pending"
+                            type="button"
+                        >
+                            Retomar atendimento
+                        </button>
+                    ` : ''}
+
+                    <button
+                        class="primary"
+                        id="finish"
+                        type="button"
+                    >
+                        Concluir chamado
+                    </button>
+
+                </div>
+            ` : ''}
+
+            ${t.solution ? `
+                <label>
+                    Solução / procedimento realizado
+                </label>
+
+                <p>
+                    ${t.solution}
+                </p>
+            ` : ''}
+
+            
+                </div>
             </div>
 
         </section>
+
+        
     `);
 }
+
+function adminReportsPage() {
+    const services = state.services || [];
+
+    const serviceOptions = services
+        .map(service => {
+            const name = String(service.name || '');
+            const safeName = name
+                .replaceAll('&', '&amp;')
+                .replaceAll('"', '&quot;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;');
+
+            return `<option value="${safeName}">${safeName}</option>`;
+        })
+        .join('');
+
+    const filters = state.reportFilters || {};
+
+const reportTickets = state.tickets || [];
+
+/*
+ * Aplica os filtros selecionados
+ * antes de calcular os indicadores.
+ */
+const filteredReportTickets = reportTickets.filter(ticket => {
+
+    const openedAt = ticket.openedAt
+        ? new Date(ticket.openedAt)
+        : null;
+
+    /*
+     * Filtro por período
+     */
+    let matchesPeriod = true;
+
+    if (openedAt && filters.period) {
+
+        const hoje = new Date();
+
+        hoje.setHours(
+            0,
+            0,
+            0,
+            0
+        );
+
+        let startDate = null;
+        let endDate = new Date(hoje);
+
+        endDate.setHours(
+            23,
+            59,
+            59,
+            999
+        );
+
+        if (filters.period === 'today') {
+
+            startDate = new Date(hoje);
+
+        } else if (filters.period === '7days') {
+
+            startDate = new Date(hoje);
+
+            startDate.setDate(
+                startDate.getDate() - 6
+            );
+
+        } else if (filters.period === '30days') {
+
+            startDate = new Date(hoje);
+
+            startDate.setDate(
+                startDate.getDate() - 29
+            );
+
+        } else if (filters.period === 'month') {
+
+            startDate = new Date(
+                hoje.getFullYear(),
+                hoje.getMonth(),
+                1
+            );
+
+        } else if (filters.period === 'custom') {
+
+            startDate = filters.start
+                ? new Date(`${filters.start}T00:00:00`)
+                : null;
+
+            endDate = filters.end
+                ? new Date(`${filters.end}T23:59:59.999`)
+                : null;
+        }
+
+        if (startDate) {
+
+            matchesPeriod =
+                openedAt >= startDate &&
+                (!endDate || openedAt <= endDate);
+        }
+    }
+
+    /*
+     * Filtro por serviço
+     */
+    const matchesService =
+        !filters.service ||
+        ticket.service === filters.service;
+
+    /*
+     * Filtro por tipo
+     */
+    const matchesType =
+        !filters.type ||
+        ticket.type === filters.type;
+
+    /*
+     * Filtro por status
+     */
+    const matchesStatus =
+        !filters.status ||
+        ticket.status === filters.status;
+
+    return (
+        matchesPeriod &&
+        matchesService &&
+        matchesType &&
+        matchesStatus
+    );
+});
+
+
+/*
+ * Indicadores calculados sobre os
+ * chamados já filtrados.
+ */
+
+const totalChamados =
+    filteredReportTickets.length;
+
+const totalPaginas =
+    Math.max(
+        1,
+        Math.ceil(
+            totalChamados /
+            state.reportPageSize
+        )
+    );
+
+if (
+    state.reportPage >
+    totalPaginas
+) {
+    state.reportPage =
+        totalPaginas;
+}
+
+const inicio =
+    (state.reportPage - 1) *
+    state.reportPageSize;
+
+const fim =
+    Math.min(
+        inicio +
+        state.reportPageSize,
+        totalChamados
+    );
+
+const chamadosPagina =
+    filteredReportTickets.slice(
+        inicio,
+        fim
+    );
+
+const total =
+    filteredReportTickets.length;
+
+const abertos =
+    filteredReportTickets.filter(
+        ticket =>
+            ticket.status === 'Aberto'
+    ).length;
+
+const emAndamento =
+    filteredReportTickets.filter(
+        ticket =>
+            ticket.status === 'Em análise' ||
+            ticket.status === 'Pendente'
+    ).length;
+
+const concluidos =
+    filteredReportTickets.filter(
+        ticket =>
+            ticket.status === 'Concluído'
+    ).length;
+
+    return shell(`
+        <div class="page-head">
+            <div>
+                <h2>Relatórios Gerenciais</h2>
+                <p>Indicadores e acompanhamento dos chamados do Portal.</p>
+            </div>
+        </div>
+
+        <section class="card report-filters">
+    <h3 style="margin-top:0">Filtros</h3>
+
+    <div class="report-filter-top">
+
+        <div>
+            <label for="report-period">Período</label>
+            <select id="report-period">
+                <option value="today" ${filters.period === 'today' ? 'selected' : ''}>Hoje</option>
+                <option value="7days" ${filters.period === '7days' ? 'selected' : ''}>Últimos 7 dias</option>
+                <option value="30days" ${filters.period === '30days' ? 'selected' : ''}>Últimos 30 dias</option>
+                <option value="month" ${filters.period === 'month' ? 'selected' : ''}>Mês atual</option>
+                <option value="custom" ${filters.period === 'custom' ? 'selected' : ''}>Personalizado</option>
+            </select>
+        </div>
+
+        <div class="report-date-range">
+            <div class="report-date-heading">
+                <strong>Intervalo de datas</strong>
+                <small>Selecione o intervalo que deseja consultar.</small>
+            </div>
+
+            <div class="report-date-fields">
+                <div>
+                    <label for="report-start">Data inicial</label>
+                    <input id="report-start" type="date" value="${filters.start || ''}">
+                </div>
+
+                <span class="report-date-arrow" aria-hidden="true">→</span>
+
+                <div>
+                    <label for="report-end">Data final</label>
+                    <input id="report-end" type="date" value="${filters.end || ''}">
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="report-filter-middle">
+
+        <div>
+            <label for="report-service">Serviço</label>
+            <select id="report-service">
+                <option value="">Todos os serviços</option>
+                ${serviceOptions}
+            </select>
+        </div>
+
+        <div>
+            <label for="report-type">Tipo</label>
+            <select id="report-type">
+                <option value="">Todos os tipos</option>
+                <option value="Incidente" ${filters.type === 'Incidente' ? 'selected' : ''}>Incidente</option>
+                <option value="Requisição" ${filters.type === 'Requisição' ? 'selected' : ''}>Requisição</option>
+            </select>
+        </div>
+
+    </div>
+
+    <div class="report-filter-bottom">
+
+        <div class="report-status-field">
+            <label for="report-status">Status</label>
+            <select id="report-status">
+                <option value="">Todos os status</option>
+                <option value="Aberto" ${filters.status === 'Aberto' ? 'selected' : ''}>Aberto</option>
+                <option value="Em análise" ${filters.status === 'Em análise' ? 'selected' : ''}>Em análise</option>
+                <option value="Pendente" ${filters.status === 'Pendente' ? 'selected' : ''}>Pendente</option>
+                <option value="Concluído" ${filters.status === 'Concluído' ? 'selected' : ''}>Concluído</option>
+            </select>
+        </div>
+
+        <div class="report-filter-actions">
+            <button class="primary" id="report-apply" type="button">
+                Aplicar filtros
+            </button>
+
+            <button class="secondary" id="report-clear" type="button">
+                Limpar filtros
+            </button>
+
+            <button class="secondary" data-view="admin" type="button">
+                Voltar
+            </button>
+        </div>
+
+    </div>
+</section>
+
+       <section class="card" style="margin-top:20px">
+    <h3 style="margin-top:0">Painel de relatórios</h3>
+
+    <div
+        style="
+            display:grid;
+            grid-template-columns:repeat(4, minmax(0, 1fr));
+            border:1px solid #d5e4f5;
+            border-radius:10px;
+            overflow:hidden;
+            background:#fff;
+        "
+    >
+
+        <div
+            style="
+                display:flex;
+                align-items:center;
+                gap:14px;
+                padding:18px 22px;
+                min-height:82px;
+            "
+        >
+            <div
+                style="
+                    width:42px;
+                    height:42px;
+                    border-radius:50%;
+                    background:#eaf3ff;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    font-size:20px;
+                    flex-shrink:0;
+                "
+            >
+                ▣
+            </div>
+
+            <div>
+                <h3
+                    style="
+                        margin:0 0 4px;
+                        font-size:14px;
+                        font-weight:600;
+                    "
+                >
+                    Total de chamados
+                </h3>
+
+                <strong
+                    id="report-total"
+                    style="
+                        font-size:26px;
+                        line-height:1;
+                    "
+                >
+                    ${total}
+                </strong>
+            </div>
+        </div>
+
+
+        <div
+            style="
+                display:flex;
+                align-items:center;
+                gap:14px;
+                padding:18px 22px;
+                min-height:82px;
+                border-left:1px solid #d5e4f5;
+            "
+        >
+            <div
+                style="
+                    width:42px;
+                    height:42px;
+                    border-radius:50%;
+                    background:#eaf8f0;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    font-size:20px;
+                    flex-shrink:0;
+                "
+            >
+                ○
+            </div>
+
+            <div>
+                <h3
+                    style="
+                        margin:0 0 4px;
+                        font-size:14px;
+                        font-weight:600;
+                    "
+                >
+                    Abertos
+                </h3>
+
+                <strong
+                    id="report-open"
+                    style="
+                        font-size:26px;
+                        line-height:1;
+                    "
+                >
+                    ${abertos}
+                </strong>
+            </div>
+        </div>
+
+
+        <div
+            style="
+                display:flex;
+                align-items:center;
+                gap:14px;
+                padding:18px 22px;
+                min-height:82px;
+                border-left:1px solid #d5e4f5;
+            "
+        >
+            <div
+                style="
+                    width:42px;
+                    height:42px;
+                    border-radius:50%;
+                    background:#fff6d9;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    font-size:20px;
+                    flex-shrink:0;
+                "
+            >
+                ◷
+            </div>
+
+            <div>
+                <h3
+                    style="
+                        margin:0 0 4px;
+                        font-size:14px;
+                        font-weight:600;
+                    "
+                >
+                    Em andamento
+                </h3>
+
+                <strong
+                    id="report-progress"
+                    style="
+                        font-size:26px;
+                        line-height:1;
+                    "
+                >
+                    ${emAndamento}
+                </strong>
+            </div>
+        </div>
+
+
+        <div
+            style="
+                display:flex;
+                align-items:center;
+                gap:14px;
+                padding:18px 22px;
+                min-height:82px;
+                border-left:1px solid #d5e4f5;
+            "
+        >
+            <div
+                style="
+                    width:42px;
+                    height:42px;
+                    border-radius:50%;
+                    background:#eaf3ff;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    font-size:20px;
+                    flex-shrink:0;
+                "
+            >
+                ✓
+            </div>
+
+            <div>
+                <h3
+                    style="
+                        margin:0 0 4px;
+                        font-size:14px;
+                        font-weight:600;
+                    "
+                >
+                    Concluídos
+                </h3>
+
+                <strong
+                    id="report-done"
+                    style="
+                        font-size:26px;
+                        line-height:1;
+                    "
+                >
+                    ${concluidos}
+                </strong>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+<section class="card" style="margin-top:20px">
+
+    <div
+        style="
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:12px;
+            margin-bottom:16px;
+            flex-wrap:wrap;
+        "
+    >
+       <div>
+    <h3 style="margin:0">
+        Chamados encontrados
+    </h3>
+
+    <p
+        style="
+            margin:4px 0 0;
+            color:var(--muted);
+            font-size:13px;
+        "
+    >
+        ${filteredReportTickets.length}
+        chamado(s) conforme os filtros selecionados.
+    </p>
+</div>
+</div>
+
+${filteredReportTickets.length
+    ? `
+        ${table(
+            chamadosPagina,
+            false
+        )}
+
+        <div
+            style="
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:12px;
+                flex-wrap:wrap;
+                margin-top:18px;
+            "
+        >
+
+            <span class="muted">
+                Exibindo
+                ${inicio + 1}
+                a
+                ${fim}
+                de
+                ${totalChamados}
+                chamados
+            </span>
+
+            <div
+                style="
+                    display:flex;
+                    align-items:center;
+                    gap:8px;
+                    flex-wrap:wrap;
+                "
+            >
+
+                <label
+                    for="report-page-size"
+                    style="margin:0"
+                >
+                    Por página:
+                </label>
+
+                <select
+                    id="report-page-size"
+                    style="width:auto"
+                >
+
+                    <option
+                        value="25"
+                        ${state.reportPageSize === 25 ? 'selected' : ''}
+                    >
+                        25
+                    </option>
+
+                    <option
+                        value="50"
+                        ${state.reportPageSize === 50 ? 'selected' : ''}
+                    >
+                        50
+                    </option>
+
+                    <option
+                        value="100"
+                        ${state.reportPageSize === 100 ? 'selected' : ''}
+                    >
+                        100
+                    </option>
+
+                </select>
+
+                <button
+                    type="button"
+                    id="report-prev"
+                    ${state.reportPage <= 1 ? 'disabled' : ''}
+                >
+                    Anterior
+                </button>
+
+                <span>
+                    Página
+                    ${state.reportPage}
+                    de
+                    ${totalPaginas}
+                </span>
+
+                <button
+                    type="button"
+                    id="report-next"
+                    ${state.reportPage >= totalPaginas ? 'disabled' : ''}
+                >
+                    Próxima
+                </button>
+
+            </div>
+
+        </div>
+    `
+    : `
+        <div class="empty">
+            Nenhum chamado encontrado
+            para os filtros selecionados.
+        </div>
+    `
+}
+
+</section>
+
+    `);
+}
+
+
 function render() {
 
     let page =
@@ -3630,13 +4312,15 @@ function render() {
                                         ? adminUsersPage()
                                         : state.view === 'admin-catalog'
                                             ? adminCatalogPage()
-                                            : state.view === 'admin-new-service'
-                                                ? adminNewServicePage()
-                                                : state.view === 'admin-edit-service'
-                                                    ? adminEditServicePage(state.selected)
-                                                    : state.view === 'admin-user-edit'
-                                                        ? adminEditUserPage(state.selected)
-                                                        : detail();
+                                            : state.view === 'admin-reports'
+                                                ? adminReportsPage()
+                                                : state.view === 'admin-new-service'
+                                                    ? adminNewServicePage()
+                                                    : state.view === 'admin-edit-service'
+                                                        ? adminEditServicePage(state.selected)
+                                                        : state.view === 'admin-user-edit'
+                                                            ? adminEditUserPage(state.selected)
+                                                            : detail();
 
     $('#app').innerHTML = page;
 
@@ -4004,6 +4688,92 @@ async function bind() {
                 }
         );
 
+            /*
+     * Filtros dos relatórios gerenciais
+     */
+
+    const reportApply = $('#report-apply');
+
+    if (reportApply) {
+
+        reportApply.onclick = () => {
+
+            state.reportFilters = {
+                period: $('#report-period').value,
+                start: $('#report-start').value,
+                end: $('#report-end').value,
+                service: $('#report-service').value,
+                type: $('#report-type').value,
+                status: $('#report-status').value
+            };
+
+            render();
+        };
+    }
+
+   const reportClear = $('#report-clear');
+
+if (reportClear) {
+
+    reportClear.onclick = () => {
+
+        state.reportFilters = {};
+        state.reportPage = 1;
+
+        render();
+    };
+}
+
+
+/*
+ * Paginação dos relatórios gerenciais
+ */
+
+const reportPageSize =
+    $('#report-page-size');
+
+if (reportPageSize) {
+
+    reportPageSize.onchange = () => {
+
+        state.reportPageSize =
+            Number(reportPageSize.value);
+
+        state.reportPage = 1;
+
+        render();
+    };
+}
+
+const reportPrev =
+    $('#report-prev');
+
+if (reportPrev) {
+
+    reportPrev.onclick = () => {
+
+        if (state.reportPage > 1) {
+
+            state.reportPage--;
+
+            render();
+        }
+    };
+}
+
+const reportNext =
+    $('#report-next');
+
+if (reportNext) {
+
+    reportNext.onclick = () => {
+
+        state.reportPage++;
+
+        render();
+    };
+}
+
     const queueResponsible =
         $('#queue-responsible');
 
@@ -4244,6 +5014,28 @@ async function bind() {
 
                     });
 
+                                        return;
+                }
+
+                // Acesso aos Relatórios Gerenciais
+                if (b.dataset.admin === 'reports') {
+                    if (state.user.role !== 'admin') return;
+
+                    state.view = 'admin-reports';
+                    state.selected = null;
+
+                    if (!state.reportFilters) {
+                        state.reportFilters = {
+                            period: '30days',
+                            start: '',
+                            end: '',
+                            service: '',
+                            type: '',
+                            status: ''
+                        };
+                    }
+
+                    render();
                     return;
                 }
 
@@ -5185,10 +5977,13 @@ async function bind() {
 
                 id,
 
-                requester:
-                    state.user.username,
+openedBy:
+    state.user.username,
 
-                service,
+requester:
+    state.user.username,
+
+service,
 
                 subcategory,
 
