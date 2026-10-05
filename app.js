@@ -3916,19 +3916,41 @@ const concluidos =
             </select>
         </div>
 
-        <div class="report-filter-actions">
-            <button class="primary" id="report-apply" type="button">
-                Aplicar filtros
-            </button>
+        <div class="actions" style="margin-top:18px">
 
-            <button class="secondary" id="report-clear" type="button">
-                Limpar filtros
-            </button>
+    <button
+        class="primary"
+        id="report-apply"
+        type="button"
+    >
+        Aplicar filtros
+    </button>
 
-            <button class="secondary" data-view="admin" type="button">
-                Voltar
-            </button>
-        </div>
+    <button
+        class="secondary"
+        id="report-clear"
+        type="button"
+    >
+        Limpar filtros
+    </button>
+
+    <button
+        class="secondary"
+        id="report-export-excel"
+        type="button"
+    >
+        Exportar Excel
+    </button>
+
+    <button
+        class="secondary"
+        data-view="admin"
+        type="button"
+    >
+        Voltar
+    </button>
+
+</div>
 
     </div>
 </section>
@@ -4290,6 +4312,1048 @@ ${filteredReportTickets.length
     `);
 }
 
+/* ============================================================
+ * EXPORTAÇÃO DE RELATÓRIOS — EXCELJS
+ * ============================================================
+ */
+
+let xlsxLibraryPromise = null;
+
+function carregarBibliotecaXLSX() {
+
+    if (window.ExcelJS) {
+        return Promise.resolve(window.ExcelJS);
+    }
+
+    if (xlsxLibraryPromise) {
+        return xlsxLibraryPromise;
+    }
+
+    xlsxLibraryPromise = new Promise((resolve, reject) => {
+
+        const script =
+            document.createElement('script');
+
+        script.src =
+            'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+
+        script.onload = () => {
+
+            if (window.ExcelJS) {
+
+                resolve(
+                    window.ExcelJS
+                );
+
+            } else {
+
+                reject(
+                    new Error(
+                        'Biblioteca ExcelJS carregada, mas indisponível.'
+                    )
+                );
+
+            }
+
+        };
+
+        script.onerror = () => {
+
+            reject(
+                new Error(
+                    'Não foi possível carregar a biblioteca ExcelJS.'
+                )
+            );
+
+        };
+
+        document.head.appendChild(
+            script
+        );
+
+    });
+
+    return xlsxLibraryPromise;
+}
+
+async function exportarRelatorioExcel(
+    chamados,
+    filtros
+) {
+
+    try {
+
+        const ExcelJS =
+            await carregarBibliotecaXLSX();
+
+        const workbook =
+            new ExcelJS.Workbook();
+
+        workbook.creator =
+            'Portal de Serviços';
+
+        workbook.created =
+            new Date();
+
+        /*
+         * =====================================================
+         * DADOS GERAIS
+         * =====================================================
+         */
+
+        const agora =
+            new Date();
+
+        const dataEmissao =
+            agora.toLocaleString(
+                'pt-BR'
+            );
+
+        const total =
+            chamados.length;
+
+        const abertos =
+            chamados.filter(
+                ticket =>
+                    ticket.status === 'Aberto'
+            ).length;
+
+        const emAnalise =
+            chamados.filter(
+                ticket =>
+                    ticket.status === 'Em análise'
+            ).length;
+
+        const pendentes =
+            chamados.filter(
+                ticket =>
+                    ticket.status === 'Pendente'
+            ).length;
+
+        const concluidos =
+            chamados.filter(
+                ticket =>
+                    ticket.status === 'Concluído'
+            ).length;
+
+        const incidentes =
+            chamados.filter(
+                ticket =>
+                    ticket.type === 'Incidente'
+            ).length;
+
+        const requisicoes =
+            chamados.filter(
+                ticket =>
+                    ticket.type === 'Requisição'
+            ).length;
+
+        /*
+         * =====================================================
+         * ABA 1 — RESUMO
+         * =====================================================
+         */
+
+        const wsResumo =
+            workbook.addWorksheet(
+                'Resumo'
+            );
+
+        wsResumo.columns = [
+            {
+                width: 30
+            },
+            {
+                width: 38
+            }
+        ];
+
+        wsResumo.mergeCells(
+            'A1:B1'
+        );
+
+        const tituloResumo =
+            wsResumo.getCell(
+                'A1'
+            );
+
+        tituloResumo.value =
+            'RELATÓRIO GERENCIAL — PORTAL DE SERVIÇOS';
+
+        tituloResumo.font = {
+            bold: true,
+            size: 16,
+            color: {
+                argb: 'FFFFFFFF'
+            }
+        };
+
+        tituloResumo.alignment = {
+            horizontal: 'center',
+            vertical: 'middle'
+        };
+
+        tituloResumo.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: {
+                argb: 'FF1F4E78'
+            }
+        };
+
+        wsResumo.getRow(1).height =
+            30;
+
+        wsResumo.addRow([]);
+
+        wsResumo.addRow([
+            'Data/hora da emissão',
+            dataEmissao
+        ]);
+
+        wsResumo.addRow([]);
+
+        const filtroTitulo =
+            wsResumo.addRow([
+                'FILTROS UTILIZADOS'
+            ]);
+
+        filtroTitulo.font = {
+            bold: true,
+            color: {
+                argb: 'FFFFFFFF'
+            }
+        };
+
+        filtroTitulo.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: {
+                argb: 'FF5B9BD5'
+            }
+        };
+
+        wsResumo.addRow([
+            'Período',
+            filtros?.period || 'Todos'
+        ]);
+
+        wsResumo.addRow([
+            'Data inicial',
+            filtros?.start || ''
+        ]);
+
+        wsResumo.addRow([
+            'Data final',
+            filtros?.end || ''
+        ]);
+
+        wsResumo.addRow([
+            'Serviço',
+            filtros?.service ||
+                'Todos os serviços'
+        ]);
+
+        wsResumo.addRow([
+            'Tipo',
+            filtros?.type ||
+                'Todos os tipos'
+        ]);
+
+        wsResumo.addRow([
+            'Status',
+            filtros?.status ||
+                'Todos os status'
+        ]);
+
+        wsResumo.addRow([]);
+
+        const indicadoresTitulo =
+            wsResumo.addRow([
+                'INDICADORES'
+            ]);
+
+        indicadoresTitulo.font = {
+            bold: true,
+            color: {
+                argb: 'FFFFFFFF'
+            }
+        };
+
+        indicadoresTitulo.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: {
+                argb: 'FF5B9BD5'
+            }
+        };
+
+        const resumoIndicadores = [
+            [
+                'Total de chamados',
+                total
+            ],
+            [
+                'Abertos',
+                abertos
+            ],
+            [
+                'Em análise',
+                emAnalise
+            ],
+            [
+                'Pendentes',
+                pendentes
+            ],
+            [
+                'Concluídos',
+                concluidos
+            ],
+            [
+                'Incidentes',
+                incidentes
+            ],
+            [
+                'Requisições',
+                requisicoes
+            ]
+        ];
+
+        resumoIndicadores.forEach(
+            item => {
+
+                wsResumo.addRow(
+                    item
+                );
+
+            }
+        );
+
+        wsResumo.eachRow(
+            row => {
+
+                row.eachCell(
+                    cell => {
+
+                        cell.border = {
+                            top: {
+                                style: 'thin',
+                                color: {
+                                    argb: 'FFD9E2F3'
+                                }
+                            },
+                            bottom: {
+                                style: 'thin',
+                                color: {
+                                    argb: 'FFD9E2F3'
+                                }
+                            },
+                            left: {
+                                style: 'thin',
+                                color: {
+                                    argb: 'FFD9E2F3'
+                                }
+                            },
+                            right: {
+                                style: 'thin',
+                                color: {
+                                    argb: 'FFD9E2F3'
+                                }
+                            }
+                        };
+
+                        cell.alignment = {
+                            vertical: 'middle'
+                        };
+
+                    }
+                );
+
+            }
+        );
+
+        /*
+         * =====================================================
+         * ABA 2 — CHAMADOS
+         * =====================================================
+         */
+
+        const wsChamados =
+            workbook.addWorksheet(
+                'Chamados'
+            );
+
+        const colunasChamados = [
+            'Chamado',
+            'Solicitante',
+            'Serviço',
+            'Subcategoria',
+            'Tipo',
+            'Prioridade',
+            'SLA (horas)',
+            'Responsável',
+            'Data de abertura',
+            'Data de conclusão',
+            'Status',
+            'Descrição'
+        ];
+
+        wsChamados.columns = [
+            {
+                header: colunasChamados[0],
+                key: 'chamado',
+                width: 14
+            },
+            {
+                header: colunasChamados[1],
+                key: 'solicitante',
+                width: 26
+            },
+            {
+                header: colunasChamados[2],
+                key: 'servico',
+                width: 25
+            },
+            {
+                header: colunasChamados[3],
+                key: 'subcategoria',
+                width: 30
+            },
+            {
+                header: colunasChamados[4],
+                key: 'tipo',
+                width: 16
+            },
+            {
+                header: colunasChamados[5],
+                key: 'prioridade',
+                width: 16
+            },
+            {
+                header: colunasChamados[6],
+                key: 'sla',
+                width: 14
+            },
+            {
+                header: colunasChamados[7],
+                key: 'responsavel',
+                width: 26
+            },
+            {
+                header: colunasChamados[8],
+                key: 'abertura',
+                width: 22
+            },
+            {
+                header: colunasChamados[9],
+                key: 'conclusao',
+                width: 22
+            },
+            {
+                header: colunasChamados[10],
+                key: 'status',
+                width: 18
+            },
+            {
+                header: colunasChamados[11],
+                key: 'descricao',
+                width: 50
+            }
+        ];
+
+        chamados.forEach(
+            ticket => {
+
+                wsChamados.addRow({
+                    chamado:
+                        numeroChamado(
+                            ticket
+                        ),
+
+                    solicitante:
+                        ticket.requesterName ||
+                        ticket.requester ||
+                        '',
+
+                    servico:
+                        ticket.service ||
+                        '',
+
+                    subcategoria:
+                        ticket.subcategory ||
+                        '',
+
+                    tipo:
+                        ticket.type ||
+                        '',
+
+                    prioridade:
+                        ticket.priority ||
+                        '',
+
+                    sla:
+                        ticket.sla ??
+                        '',
+
+                    responsavel:
+                        ticket.responsible ||
+                        'Não atribuído',
+
+                    abertura:
+                        ticket.openedAt
+                            ? formatDate(
+                                ticket.openedAt
+                            )
+                            : '',
+
+                    conclusao:
+                        ticket.closedAt
+                            ? formatDate(
+                                ticket.closedAt
+                            )
+                            : '',
+
+                    status:
+                        ticket.status ||
+                        '',
+
+                    descricao:
+                        ticket.description ||
+                        ''
+                });
+
+            }
+        );
+
+        /*
+         * Congela a primeira linha.
+         */
+
+        wsChamados.views = [
+            {
+                state: 'frozen',
+                ySplit: 1
+            }
+        ];
+
+        /*
+         * Filtro automático.
+         */
+
+        if (
+            wsChamados.rowCount >
+            1
+        ) {
+
+            wsChamados.autoFilter = {
+                from: {
+                    row: 1,
+                    column: 1
+                },
+                to: {
+                    row:
+                        wsChamados.rowCount,
+                    column:
+                        colunasChamados.length
+                }
+            };
+
+        }
+
+        /*
+         * Formatação do cabeçalho.
+         */
+
+        const headerRow =
+            wsChamados.getRow(1);
+
+        headerRow.height = 26;
+
+        headerRow.eachCell(
+            cell => {
+
+                cell.font = {
+                    bold: true,
+                    color: {
+                        argb: 'FFFFFFFF'
+                    }
+                };
+
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: {
+                        argb: 'FF1F4E78'
+                    }
+                };
+
+                cell.alignment = {
+                    horizontal: 'center',
+                    vertical: 'middle',
+                    wrapText: true
+                };
+
+                cell.border = {
+                    top: {
+                        style: 'thin',
+                        color: {
+                            argb: 'FFFFFFFF'
+                        }
+                    },
+                    bottom: {
+                        style: 'thin',
+                        color: {
+                            argb: 'FFFFFFFF'
+                        }
+                    },
+                    left: {
+                        style: 'thin',
+                        color: {
+                            argb: 'FFFFFFFF'
+                        }
+                    },
+                    right: {
+                        style: 'thin',
+                        color: {
+                            argb: 'FFFFFFFF'
+                        }
+                    }
+                };
+
+            }
+        );
+
+        /*
+         * Formatação das linhas.
+         * Zebra + bordas + quebra de texto.
+         */
+
+        for (
+            let numeroLinha = 2;
+            numeroLinha <=
+                wsChamados.rowCount;
+            numeroLinha++
+        ) {
+
+            const row =
+                wsChamados.getRow(
+                    numeroLinha
+                );
+
+            row.eachCell(
+                cell => {
+
+                    cell.alignment = {
+                        vertical: 'top',
+                        wrapText: true
+                    };
+
+                    cell.border = {
+                        top: {
+                            style: 'thin',
+                            color: {
+                                argb: 'FFD9E2F3'
+                            }
+                        },
+                        bottom: {
+                            style: 'thin',
+                            color: {
+                                argb: 'FFD9E2F3'
+                            }
+                        },
+                        left: {
+                            style: 'thin',
+                            color: {
+                                argb: 'FFD9E2F3'
+                            }
+                        },
+                        right: {
+                            style: 'thin',
+                            color: {
+                                argb: 'FFD9E2F3'
+                            }
+                        }
+                    };
+
+                }
+            );
+
+            /*
+             * Linhas pares recebem fundo alternado.
+             */
+
+            if (
+                numeroLinha % 2 === 0
+            ) {
+
+                row.eachCell(
+                    cell => {
+
+                        cell.fill = {
+                            type: 'pattern',
+                            pattern: 'solid',
+                            fgColor: {
+                                argb: 'FFF2F6FA'
+                            }
+                        };
+
+                    }
+                );
+
+            }
+
+            row.height = 32;
+        }
+
+        /*
+         * =====================================================
+         * ABA 3 — INDICADORES
+         * =====================================================
+         */
+
+        const wsIndicadores =
+            workbook.addWorksheet(
+                'Indicadores'
+            );
+
+        wsIndicadores.columns = [
+            {
+                width: 30
+            },
+            {
+                width: 18
+            }
+        ];
+
+        wsIndicadores.mergeCells(
+            'A1:B1'
+        );
+
+        const tituloIndicadores =
+            wsIndicadores.getCell(
+                'A1'
+            );
+
+        tituloIndicadores.value =
+            'INDICADORES GERENCIAIS';
+
+        tituloIndicadores.font = {
+            bold: true,
+            size: 16,
+            color: {
+                argb: 'FFFFFFFF'
+            }
+        };
+
+        tituloIndicadores.alignment = {
+            horizontal: 'center',
+            vertical: 'middle'
+        };
+
+        tituloIndicadores.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: {
+                argb: 'FF1F4E78'
+            }
+        };
+
+        wsIndicadores.getRow(1).height =
+            30;
+
+        wsIndicadores.addRow([]);
+
+        const statusTitulo =
+            wsIndicadores.addRow([
+                'STATUS',
+                'QUANTIDADE'
+            ]);
+
+        const tiposTitulo =
+            null;
+
+        statusTitulo.eachCell(
+            cell => {
+
+                cell.font = {
+                    bold: true,
+                    color: {
+                        argb: 'FFFFFFFF'
+                    }
+                };
+
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: {
+                        argb: 'FF5B9BD5'
+                    }
+                };
+
+                cell.alignment = {
+                    horizontal: 'center',
+                    vertical: 'middle'
+                };
+
+            }
+        );
+
+        [
+            [
+                'Aberto',
+                abertos
+            ],
+            [
+                'Em análise',
+                emAnalise
+            ],
+            [
+                'Pendente',
+                pendentes
+            ],
+            [
+                'Concluído',
+                concluidos
+            ]
+        ].forEach(
+            item =>
+                wsIndicadores.addRow(
+                    item
+                )
+        );
+
+        wsIndicadores.addRow([]);
+
+        const tipoTitulo =
+            wsIndicadores.addRow([
+                'TIPO',
+                'QUANTIDADE'
+            ]);
+
+        tipoTitulo.eachCell(
+            cell => {
+
+                cell.font = {
+                    bold: true,
+                    color: {
+                        argb: 'FFFFFFFF'
+                    }
+                };
+
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: {
+                        argb: 'FF5B9BD5'
+                    }
+                };
+
+                cell.alignment = {
+                    horizontal: 'center',
+                    vertical: 'middle'
+                };
+
+            }
+        );
+
+        [
+            [
+                'Incidente',
+                incidentes
+            ],
+            [
+                'Requisição',
+                requisicoes
+            ]
+        ].forEach(
+            item =>
+                wsIndicadores.addRow(
+                    item
+                )
+        );
+
+        wsIndicadores.addRow([]);
+
+        const contagemServicos = {};
+
+        chamados.forEach(
+            ticket => {
+
+                const servico =
+                    ticket.service ||
+                    'Não informado';
+
+                contagemServicos[servico] =
+                    (
+                        contagemServicos[servico] ||
+                        0
+                    ) + 1;
+
+            }
+        );
+
+        const servicosTitulo =
+            wsIndicadores.addRow([
+                'SERVIÇO',
+                'QUANTIDADE'
+            ]);
+
+        servicosTitulo.eachCell(
+            cell => {
+
+                cell.font = {
+                    bold: true,
+                    color: {
+                        argb: 'FFFFFFFF'
+                    }
+                };
+
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: {
+                        argb: 'FF5B9BD5'
+                    }
+                };
+
+                cell.alignment = {
+                    horizontal: 'center',
+                    vertical: 'middle'
+                };
+
+            }
+        );
+
+        Object.entries(
+            contagemServicos
+        )
+            .sort(
+                (a, b) =>
+                    b[1] - a[1]
+            )
+            .forEach(
+                ([servico, quantidade]) => {
+
+                    wsIndicadores.addRow([
+                        servico,
+                        quantidade
+                    ]);
+
+                }
+            );
+
+        wsIndicadores.eachRow(
+            row => {
+
+                row.eachCell(
+                    cell => {
+
+                        cell.border = {
+                            top: {
+                                style: 'thin',
+                                color: {
+                                    argb: 'FFD9E2F3'
+                                }
+                            },
+                            bottom: {
+                                style: 'thin',
+                                color: {
+                                    argb: 'FFD9E2F3'
+                                }
+                            },
+                            left: {
+                                style: 'thin',
+                                color: {
+                                    argb: 'FFD9E2F3'
+                                }
+                            },
+                            right: {
+                                style: 'thin',
+                                color: {
+                                    argb: 'FFD9E2F3'
+                                }
+                            }
+                        };
+
+                    }
+                );
+
+            }
+        );
+
+        /*
+         * =====================================================
+         * DOWNLOAD
+         * =====================================================
+         */
+
+        const dataArquivo =
+            agora
+                .toISOString()
+                .slice(
+                    0,
+                    10
+                )
+                .replaceAll(
+                    '-',
+                    ''
+                );
+
+        const nomeArquivo =
+            `ITSM_Relatorio_Gerencial_${dataArquivo}.xlsx`;
+
+        const buffer =
+            await workbook.xlsx.writeBuffer();
+
+        const blob =
+            new Blob(
+                [buffer],
+                {
+                    type:
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                }
+            );
+
+        const url =
+            URL.createObjectURL(
+                blob
+            );
+
+        const link =
+            document.createElement(
+                'a'
+            );
+
+        link.href = url;
+
+        link.download =
+            nomeArquivo;
+
+        document.body.appendChild(
+            link
+        );
+
+        link.click();
+
+        link.remove();
+
+        URL.revokeObjectURL(
+            url
+        );
+
+    } catch (error) {
+
+        console.error(
+            'Erro na exportação Excel:',
+            error
+        );
+
+        alert(
+            'Não foi possível gerar o relatório Excel.'
+        );
+
+    }
+}
 
 function render() {
 
@@ -4710,6 +5774,252 @@ async function bind() {
             render();
         };
     }
+
+
+const reportExportExcel =
+    $('#report-export-excel');
+
+if (reportExportExcel) {
+
+    reportExportExcel.onclick = async () => {
+
+        const filtros =
+            state.reportFilters || {};
+
+        const chamados =
+            state.tickets || [];
+
+        reportExportExcel.disabled =
+            true;
+
+        reportExportExcel.textContent =
+            'Gerando Excel...';
+
+        try {
+
+            await exportarRelatorioExcel(
+                chamados.filter(ticket => {
+
+                    const openedAt =
+                        ticket.openedAt
+                            ? new Date(
+                                ticket.openedAt
+                            )
+                            : null;
+
+                    let matchesPeriod =
+                        true;
+
+                    if (
+                        openedAt &&
+                        filtros.period
+                    ) {
+
+                        const hoje =
+                            new Date();
+
+                        let startDate =
+                            null;
+
+                        let endDate =
+                            null;
+
+                        if (
+                            filtros.period ===
+                            'today'
+                        ) {
+
+                            startDate =
+                                new Date(
+                                    hoje
+                                );
+
+                            startDate.setHours(
+                                0,
+                                0,
+                                0,
+                                0
+                            );
+
+                            endDate =
+                                new Date(
+                                    hoje
+                                );
+
+                            endDate.setHours(
+                                23,
+                                59,
+                                59,
+                                999
+                            );
+
+                        } else if (
+                            filtros.period ===
+                            '7days'
+                        ) {
+
+                            startDate =
+                                new Date(
+                                    hoje
+                                );
+
+                            startDate.setDate(
+                                hoje.getDate() - 6
+                            );
+
+                            startDate.setHours(
+                                0,
+                                0,
+                                0,
+                                0
+                            );
+
+                            endDate =
+                                new Date(
+                                    hoje
+                                );
+
+                            endDate.setHours(
+                                23,
+                                59,
+                                59,
+                                999
+                            );
+
+                        } else if (
+                            filtros.period ===
+                            '30days'
+                        ) {
+
+                            startDate =
+                                new Date(
+                                    hoje
+                                );
+
+                            startDate.setDate(
+                                hoje.getDate() - 29
+                            );
+
+                            startDate.setHours(
+                                0,
+                                0,
+                                0,
+                                0
+                            );
+
+                            endDate =
+                                new Date(
+                                    hoje
+                                );
+
+                            endDate.setHours(
+                                23,
+                                59,
+                                59,
+                                999
+                            );
+
+                        } else if (
+                            filtros.period ===
+                            'month'
+                        ) {
+
+                            startDate =
+                                new Date(
+                                    hoje.getFullYear(),
+                                    hoje.getMonth(),
+                                    1
+                                );
+
+                            endDate =
+                                new Date(
+                                    hoje.getFullYear(),
+                                    hoje.getMonth() + 1,
+                                    0,
+                                    23,
+                                    59,
+                                    59,
+                                    999
+                                );
+
+                        } else if (
+                            filtros.period ===
+                            'custom'
+                        ) {
+
+                            startDate =
+                                filtros.start
+                                    ? new Date(
+                                        `${filtros.start}T00:00:00`
+                                    )
+                                    : null;
+
+                            endDate =
+                                filtros.end
+                                    ? new Date(
+                                        `${filtros.end}T23:59:59.999`
+                                    )
+                                    : null;
+                        }
+
+                        if (startDate) {
+
+                            matchesPeriod =
+                                openedAt >= startDate &&
+                                (
+                                    !endDate ||
+                                    openedAt <= endDate
+                                );
+                        }
+                    }
+
+                    const matchesService =
+                        !filtros.service ||
+                        ticket.service ===
+                        filtros.service;
+
+                    const matchesType =
+                        !filtros.type ||
+                        ticket.type ===
+                        filtros.type;
+
+                    const matchesStatus =
+                        !filtros.status ||
+                        ticket.status ===
+                        filtros.status;
+
+                    return (
+                        matchesPeriod &&
+                        matchesService &&
+                        matchesType &&
+                        matchesStatus
+                    );
+
+                }),
+                filtros
+            );
+
+        } catch (error) {
+
+            console.error(
+                'Erro na exportação Excel:',
+                error
+            );
+
+            alert(
+                'Não foi possível gerar o relatório Excel.'
+            );
+
+        } finally {
+
+            reportExportExcel.disabled =
+                false;
+
+            reportExportExcel.textContent =
+                'Exportar Excel';
+        }
+    };
+}
 
    const reportClear = $('#report-clear');
 
